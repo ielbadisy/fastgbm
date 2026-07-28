@@ -1,0 +1,25 @@
+Package: fastgbm
+Type: Package
+Title: Fast Histogram Gradient Boosting for R
+Version: 0.1.0
+Authors@R: person("Imad", "El-Badisy", email = "elbadisyimad@gmail.com", role = c("aut", "cre"))
+Author: Imad El-Badisy
+Maintainer: Imad El-Badisy <elbadisyimad@gmail.com>
+Description: A compact gradient boosting machine with a compiled backend,
+    aimed at fast regression and classification workflows with deterministic
+    training, formula support, and a simple R interface.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.5.0)
+Imports:
+    stats,
+    utils,
+    Rcpp
+LinkingTo: Rcpp
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+SystemRequirements: C++17
