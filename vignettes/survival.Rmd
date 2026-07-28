@@ -1,0 +1,10 @@
+---
+title: "Survival"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Survival}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+Survival support is planned for a later phase.

@@ -1,0 +1,10 @@
+---
+title: "Classification"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Classification}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+Classification examples will be added here.

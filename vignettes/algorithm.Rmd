@@ -1,0 +1,10 @@
+---
+title: "Algorithm"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Algorithm}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+The package uses histogram-based splitting with greedy recursive tree growth.
