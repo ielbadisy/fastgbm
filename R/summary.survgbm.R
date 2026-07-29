@@ -1,4 +1,10 @@
-summary.fastgbm <- function(object, ...) {
+#' Summarize a fitted survgbm model
+#'
+#' @param object A fitted `survgbm` object.
+#' @param ... Unused.
+#' @return A `summary.survgbm` object.
+#' @export
+summary.survgbm <- function(object, ...) {
   top <- head(importance(object), 10)
   structure(
     list(
@@ -7,13 +13,26 @@ summary.fastgbm <- function(object, ...) {
       learning_rate = object$learning_rate,
       max_depth = object$max_depth,
       feature_importance = top,
-      train_metric = object$train_metric
+      train_metric = object$train_metric,
+      stopping_reason = object$stopping_reason,
+      best_iteration = object$best_iteration,
+      n_trees_grown = object$n_trees_grown
     ),
-    class = "summary.fastgbm"
+    class = "summary.survgbm"
   )
 }
 
-print.summary.fastgbm <- function(x, ...) {
+#' Print a survgbm model summary
+#'
+#' @param x A `summary.survgbm` object.
+#' @param ... Unused.
+#' @return `x`, invisibly.
+#' @export
+print.summary.survgbm <- function(x, ...) {
+  if (!is.null(x$stopping_reason) && x$stopping_reason != "disabled") {
+    cat("stopping reason:", x$stopping_reason, "\n")
+    cat("best iteration:", x$best_iteration, "of", x$n_trees_grown, "grown\n\n")
+  }
   print(x$feature_importance)
   invisible(x)
 }
