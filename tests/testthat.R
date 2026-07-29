@@ -1,4 +1,4 @@
 library(testthat)
-library(fastgbm)
+library(survgbm)
 
-test_check("fastgbm")
+test_check("survgbm")
