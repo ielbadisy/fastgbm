@@ -1,7 +1,9 @@
-library(fastgbm)
+library(survgbm)
 
 set.seed(1)
-x <- matrix(rnorm(200), ncol = 4)
-y <- x[, 1] + rnorm(nrow(x), sd = 0.2)
-fit <- fastgbm(x, y, objective = "reg:squarederror", ntrees = 10L, verbose = FALSE)
+n <- 200
+x <- matrix(rnorm(n * 4), ncol = 4)
+time <- exp(x[, 1] + rnorm(n, sd = 0.2))
+status <- rbinom(n, 1, 0.8)
+fit <- survgbm(x, time = time, status = status, objective = "cox", ntrees = 10L, verbose = FALSE)
 stopifnot(is.numeric(predict(fit, x)))
