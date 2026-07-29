@@ -220,14 +220,122 @@ static double predict_tree_row(const TreeModel& tree, const IntegerMatrix& bins,
   }
 }
 
-extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP ySEXP, SEXP objectiveSEXP, SEXP ntreesSEXP,
-                                SEXP learning_rateSEXP, SEXP max_depthSEXP, SEXP min_node_sizeSEXP,
-                                SEXP max_binsSEXP, SEXP subsampleSEXP, SEXP colsampleSEXP,
-                                SEXP lambdaSEXP, SEXP gammaSEXP, SEXP min_child_weightSEXP,
-                                SEXP seedSEXP, SEXP verboseSEXP) {
+static inline double safe_exp(double x) {
+  return std::exp(std::max(-35.0, std::min(35.0, x)));
+}
+
+static void compute_regression_grad_hess(const NumericVector& pred, const NumericVector& y,
+                                         NumericVector& grad, NumericVector& hess) {
+  int n = pred.size();
+  for (int i = 0; i < n; ++i) {
+    grad[i] = pred[i] - y[i];
+    hess[i] = 1.0;
+  }
+}
+
+static void compute_binary_grad_hess(const NumericVector& pred, const NumericVector& y,
+                                     NumericVector& grad, NumericVector& hess) {
+  int n = pred.size();
+  for (int i = 0; i < n; ++i) {
+    double p_i = sigmoid(pred[i]);
+    grad[i] = p_i - y[i];
+    hess[i] = std::max(1e-6, p_i * (1.0 - p_i));
+  }
+}
+
+static void compute_cox_grad_hess(const NumericVector& pred, const NumericVector& time,
+                                  const IntegerVector& status, NumericVector& grad,
+                                  NumericVector& hess) {
+  int n = pred.size();
+  std::vector<int> order(n);
+  for (int i = 0; i < n; ++i) order[i] = i;
+  std::sort(order.begin(), order.end(), [&](int a, int b) {
+    if (time[a] == time[b]) return a < b;
+    return time[a] < time[b];
+  });
+
+  std::vector<double> exp_pred(n);
+  for (int i = 0; i < n; ++i) exp_pred[i] = safe_exp(pred[i]);
+
+  std::vector<double> uniq_times;
+  std::vector<std::vector<int>> blocks;
+  for (int idx = 0; idx < n; ) {
+    double t = time[order[idx]];
+    std::vector<int> block;
+    while (idx < n && time[order[idx]] == t) {
+      block.push_back(order[idx]);
+      ++idx;
+    }
+    uniq_times.push_back(t);
+    blocks.push_back(std::move(block));
+  }
+
+  std::vector<double> risk_sum(blocks.size(), 0.0);
+  double running = 0.0;
+  for (int b = static_cast<int>(blocks.size()) - 1; b >= 0; --b) {
+    for (int idx : blocks[b]) {
+      running += exp_pred[idx];
+    }
+    risk_sum[b] = running;
+  }
+
+  std::vector<double> cum1(blocks.size(), 0.0), cum2(blocks.size(), 0.0);
+  double c1 = 0.0, c2 = 0.0;
+  for (size_t b = 0; b < blocks.size(); ++b) {
+    int d = 0;
+    for (int idx : blocks[b]) {
+      if (status[idx] == 1) ++d;
+    }
+    double denom = std::max(risk_sum[b], 1e-12);
+    c1 += static_cast<double>(d) / denom;
+    c2 += static_cast<double>(d) / (denom * denom);
+    cum1[b] = c1;
+    cum2[b] = c2;
+  }
+
+  for (size_t b = 0; b < blocks.size(); ++b) {
+    for (int idx : blocks[b]) {
+      double a = cum1[b];
+      double b2 = cum2[b];
+      double e = exp_pred[idx];
+      grad[idx] = e * a - status[idx];
+      hess[idx] = std::max(1e-6, e * a - e * e * b2);
+    }
+  }
+}
+
+static void compute_aft_grad_hess(const NumericVector& pred, const NumericVector& time,
+                                  const IntegerVector& status, NumericVector& grad,
+                                  NumericVector& hess, double sigma = 1.0) {
+  int n = pred.size();
+  double sigma2 = sigma * sigma;
+  for (int i = 0; i < n; ++i) {
+    double logt = std::log(time[i]);
+    if (status[i] == 1) {
+      grad[i] = (pred[i] - logt) / sigma2;
+      hess[i] = 1.0 / sigma2;
+    } else {
+      double z = (logt - pred[i]) / sigma;
+      double sf = std::max(1e-12, R::pnorm5(z, 0.0, 1.0, /*lower_tail=*/false, /*log_p=*/false));
+      double pdf = R::dnorm4(z, 0.0, 1.0, /*give_log=*/false);
+      grad[i] = pdf / (sigma * sf);
+      double h = pdf * (z * sf - pdf) / (sigma2 * sf * sf);
+      hess[i] = std::max(1e-6, h);
+    }
+  }
+}
+
+extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP ySEXP, SEXP timeSEXP, SEXP statusSEXP,
+                                SEXP objectiveSEXP, SEXP ntreesSEXP, SEXP learning_rateSEXP,
+                                SEXP max_depthSEXP, SEXP min_node_sizeSEXP, SEXP max_binsSEXP,
+                                SEXP subsampleSEXP, SEXP colsampleSEXP, SEXP lambdaSEXP,
+                                SEXP gammaSEXP, SEXP min_child_weightSEXP, SEXP seedSEXP,
+                                SEXP verboseSEXP) {
   BEGIN_RCPP
   NumericMatrix x(xSEXP);
   NumericVector y(ySEXP);
+  NumericVector time = timeSEXP == R_NilValue ? NumericVector() : NumericVector(timeSEXP);
+  IntegerVector status = statusSEXP == R_NilValue ? IntegerVector() : IntegerVector(statusSEXP);
   std::string objective = as<std::string>(objectiveSEXP);
   int ntrees = as<int>(ntreesSEXP);
   double learning_rate = as<double>(learning_rateSEXP);
@@ -244,6 +352,12 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP ySEXP, SEXP objectiveSEXP, SEXP
 
   int n = x.nrow();
   int p = x.ncol();
+  bool survival_objective = (objective == "survival:cox" || objective == "survival:aft");
+  if (survival_objective) {
+    if (time.size() != n || status.size() != n) {
+      stop("`time` and `status` are required for survival objectives and must match `x`.");
+    }
+  }
   std::vector<std::vector<double>> cuts(p);
   std::vector<int> max_bin_by_feature(p, 1);
   for (int j = 0; j < p; ++j) {
@@ -270,6 +384,20 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP ySEXP, SEXP objectiveSEXP, SEXP
   if (objective == "binary:logistic") {
     double mean_y = std::min(1.0 - 1e-6, std::max(1e-6, mean_vec(y)));
     init_score = std::log(mean_y / (1.0 - mean_y));
+  } else if (objective == "survival:aft") {
+    double sum_logt = 0.0;
+    int count = 0;
+    for (int i = 0; i < n; ++i) {
+      if (status[i] == 1) {
+        sum_logt += std::log(time[i]);
+        ++count;
+      }
+    }
+    if (count == 0) {
+      for (int i = 0; i < n; ++i) sum_logt += std::log(time[i]);
+      count = n;
+    }
+    init_score = sum_logt / std::max(1, count);
   } else {
     init_score = mean_vec(y);
   }
@@ -285,16 +413,13 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP ySEXP, SEXP objectiveSEXP, SEXP
   for (int m = 0; m < ntrees; ++m) {
     NumericVector grad(n), hess(n);
     if (objective == "binary:logistic") {
-      for (int i = 0; i < n; ++i) {
-        double p_i = sigmoid(pred[i]);
-        grad[i] = p_i - y[i];
-        hess[i] = std::max(1e-6, p_i * (1.0 - p_i));
-      }
+      compute_binary_grad_hess(pred, y, grad, hess);
+    } else if (objective == "survival:cox") {
+      compute_cox_grad_hess(pred, time, status, grad, hess);
+    } else if (objective == "survival:aft") {
+      compute_aft_grad_hess(pred, time, status, grad, hess, 1.0);
     } else {
-      for (int i = 0; i < n; ++i) {
-        grad[i] = pred[i] - y[i];
-        hess[i] = 1.0;
-      }
+      compute_regression_grad_hess(pred, y, grad, hess);
     }
 
     std::vector<int> rows;
@@ -355,7 +480,8 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP ySEXP, SEXP objectiveSEXP, SEXP
     _["learning_rate"] = learning_rate,
     _["max_depth"] = max_depth,
     _["min_node_size"] = min_node_size,
-    _["max_bins"] = max_bins
+    _["max_bins"] = max_bins,
+    _["survival_sigma"] = 1.0
   );
   END_RCPP
 }

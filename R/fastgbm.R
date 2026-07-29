@@ -1,4 +1,4 @@
-fastgbm <- function(x, y = NULL, objective = NULL,
+fastgbm <- function(x, y = NULL, time = NULL, status = NULL, objective = NULL,
                     ntrees = 500L,
                     learning_rate = 0.05,
                     max_depth = 6L,
@@ -24,6 +24,8 @@ fastgbm <- function(x, y = NULL, objective = NULL,
     return(do.call(fastgbm_formula, c(list(
       formula = x,
       data = if (is.null(data)) y else data,
+      time = time,
+      status = status,
       objective = objective
     ), dots, list(
       ntrees = ntrees,
@@ -46,17 +48,28 @@ fastgbm <- function(x, y = NULL, objective = NULL,
     ))))
   }
 
-  if (is.null(y)) {
-    stop("`y` is required for matrix/data frame interfaces.", call. = FALSE)
-  }
   if (grow_policy != "depthwise") {
     warning("Only `grow_policy = 'depthwise'` is implemented; using depthwise.", call. = FALSE)
   }
   xmat <- fastgbm_as_matrix(x)
   if (is.null(objective)) {
-    objective <- fastgbm_default_objective(fastgbm_validate_y(y, objective))
+    if (!is.null(time) || !is.null(status) || inherits(y, "Surv")) {
+      objective <- "survival:cox"
+    } else {
+      objective <- fastgbm_default_objective(fastgbm_validate_y(y, objective))
+    }
   }
-  y <- fastgbm_prepare_response(y, objective)
+  if (is.null(y) && !objective %in% c("survival:cox", "survival:aft")) {
+    stop("`y` is required for matrix/data frame interfaces.", call. = FALSE)
+  }
+  if (objective %in% c("survival:cox", "survival:aft")) {
+    surv <- fastgbm_validate_survival(time, status, y)
+    time <- surv$time
+    status <- surv$status
+    y <- NULL
+  } else {
+    y <- fastgbm_prepare_response(y, objective)
+  }
   if (!is.null(max_leaves)) {
     warning("`max_leaves` is currently ignored.", call. = FALSE)
   }
@@ -67,6 +80,8 @@ fastgbm <- function(x, y = NULL, objective = NULL,
     "fastgbm_fit_cpp",
     xmat,
     as.numeric(y),
+    as.numeric(time),
+    as.integer(status),
     as.character(objective),
     as.integer(ntrees),
     as.numeric(learning_rate),
@@ -89,6 +104,15 @@ fastgbm <- function(x, y = NULL, objective = NULL,
   fit$min_node_size <- min_node_size
   fit$fitted_raw <- .Call("fastgbm_predict_cpp", fit, xmat, "link")
   fit$fitted <- fastgbm_transform_response(fit$fitted_raw, objective)
+  if (objective == "survival:cox") {
+    fit$surv_time <- time
+    fit$surv_status <- status
+    fit$baseline <- fastgbm_survival_baseline(time, status, fit$fitted_raw)
+  } else if (objective == "survival:aft") {
+    fit$surv_time <- time
+    fit$surv_status <- status
+    fit$survival_sigma <- 1
+  }
   class(fit) <- "fastgbm"
   fit
 }

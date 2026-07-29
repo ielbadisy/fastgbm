@@ -3,13 +3,18 @@
 \alias{save_fastgbm}
 \alias{load_fastgbm}
 \alias{importance}
+\alias{predict.fastgbm}
+\alias{print.fastgbm}
+\alias{summary.fastgbm}
+\alias{print.summary.fastgbm}
 \alias{coef.fastgbm}
 \title{Fast gradient boosting}
 \description{Fit a histogram-based gradient boosting model with a compiled backend.}
 \usage{
-fastgbm(x, y = NULL, objective = NULL, ntrees = 500L, learning_rate = 0.05, max_depth = 6L,
-  min_node_size = 20L, max_leaves = NULL, max_bins = 255L, subsample = 1, colsample = 1,
-  lambda = 1, gamma = 0, min_child_weight = 1, validation = NULL, early_stopping = NULL,
+fastgbm(x, y = NULL, time = NULL, status = NULL, objective = NULL, ntrees = 500L,
+  learning_rate = 0.05, max_depth = 6L, min_node_size = 20L, max_leaves = NULL,
+  max_bins = 255L, subsample = 1, colsample = 1, lambda = 1, gamma = 0,
+  min_child_weight = 1, validation = NULL, early_stopping = NULL,
   grow_policy = "depthwise", threads = 0L, seed = 1L, verbose = TRUE, ...)
 save_fastgbm(object, path)
 load_fastgbm(path)
@@ -19,6 +24,8 @@ coef.fastgbm(object, ...)
 \arguments{
 \item{x}{Feature matrix or formula.}
 \item{y}{Response vector or formula data.}
+\item{time}{Survival time for survival objectives.}
+\item{status}{Event indicator for survival objectives.}
 \item{objective}{Objective name.}
 \item{ntrees}{Number of boosting rounds.}
 \item{learning_rate}{Shrinkage parameter.}
@@ -46,5 +53,14 @@ coef.fastgbm(object, ...)
 \dontrun{
 fit <- fastgbm(iris[, 1:4], as.numeric(iris$Species == "setosa"), objective = "binary:logistic")
 predict(fit, iris[1:5, 1:4], type = "response")
+
+lung_dat <- na.omit(survival::lung[, c("time", "status", "age", "sex")])
+cox_fit <- fastgbm(
+  as.matrix(lung_dat[, c("age", "sex")]),
+  time = lung_dat$time,
+  status = lung_dat$status,
+  objective = "survival:cox"
+)
+predict(cox_fit, as.matrix(lung_dat[1:3, c("age", "sex")]), type = "survival", times = c(30, 90, 365))
 }
 }
