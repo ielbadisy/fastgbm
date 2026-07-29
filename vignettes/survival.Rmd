@@ -1,10 +1,100 @@
 ---
-title: "Survival"
+title: "Cox, AFT, and Piecewise-Exponential Objectives"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Survival}
+  %\VignetteIndexEntry{Cox, AFT, and Piecewise-Exponential Objectives}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-Survival support is planned for a later phase.
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r}
+library(survgbm)
+library(survival)
+```
+
+## Cox objective (`objective = "cox"`, the default)
+
+Minimizes the negative Cox partial log-likelihood (Breslow handling of tied event
+times). `predict(..., type = "link")` returns the log relative-risk score; higher
+values mean higher risk (shorter expected survival). `predict(..., type =
+"survival")` combines the fitted risk score with a Breslow baseline cumulative
+hazard estimated after training to return survival probabilities at specific
+horizons: $\hat S(t \mid x) = \hat S_0(t)^{\exp(f(x))}$.
+
+```{r}
+lung_dat <- na.omit(lung[, c("time", "status", "age", "sex", "ph.ecog")])
+x <- as.matrix(lung_dat[, c("age", "sex", "ph.ecog")])
+
+cox_fit <- survgbm(x, time = lung_dat$time, status = lung_dat$status,
+                   objective = "cox", ntrees = 100L, max_depth = 3L, verbose = FALSE)
+
+risk <- predict(cox_fit, x, type = "link")
+surv <- predict(cox_fit, x[1:5, ], type = "survival", times = c(90, 180, 365))
+surv
+```
+
+## AFT objective (`objective = "aft"`)
+
+Fits a normal location-scale accelerated failure time model: $\log T = f(x) + \sigma Z$,
+$Z \sim N(0, 1)$. Right-censored observations contribute via the survival function of
+the normal distribution. Unlike Cox, the linear predictor estimates $\log(\text{time})$
+directly (higher = *longer* predicted survival), the opposite direction from a Cox risk
+score -- `metrics()` accounts for this automatically when computing concordance, but if
+you use the raw linear predictor for anything else, remember to negate it for a
+risk-like ordering.
+
+```{r}
+set.seed(1)
+n <- 200
+x_aft <- matrix(rnorm(n * 2), ncol = 2, dimnames = list(NULL, c("x1", "x2")))
+time <- exp(1 + 0.6 * x_aft[, 1] - 0.3 * x_aft[, 2] + rnorm(n, sd = 0.3))
+status <- rbinom(n, 1, 0.75)
+
+aft_fit <- survgbm(x_aft, time = time, status = status, objective = "aft",
+                   ntrees = 100L, max_depth = 3L, verbose = FALSE)
+predict(aft_fit, x_aft[1:5, ], type = "survival", times = c(1, 3, 5))
+```
+
+## Piecewise-exponential objective (`objective = "pexp"`)
+
+Unlike Cox and AFT, `pexp` doesn't fit a single scalar score per subject; it models
+the hazard jointly over covariates *and* time. Training data is expanded into
+person-time rows via the standard "Poisson trick" (one row per subject per time
+interval they were at risk in), and the ensemble predicts the log hazard rate for
+each row -- an ordinary Poisson-with-offset objective, no baseline assumption
+needed. This means `predict(..., type = "link")` isn't a single "risk score" the way
+Cox's is; it defaults to the cumulative hazard at the model's full fitted time
+horizon, a fixed and well-defined (if coarser) risk score for ranking.
+`predict(..., type = "survival")` evaluates the fitted hazard-over-time surface
+directly at the requested times.
+
+```{r}
+pexp_fit <- survgbm(x, time = lung_dat$time, status = lung_dat$status,
+                    objective = "pexp", ntrees = 100L, max_depth = 3L, verbose = FALSE)
+predict(pexp_fit, x[1:5, ], type = "survival", times = c(90, 180, 365))
+metrics(pexp_fit, y = Surv(lung_dat$time, lung_dat$status))
+```
+
+## Concordance
+
+```{r}
+metrics(cox_fit, y = Surv(lung_dat$time, lung_dat$status))
+metrics(aft_fit, y = Surv(time, status))
+```
+
+## Missing values
+
+Missing predictor values are routed natively: at every candidate split, both
+"missing goes left" and "missing goes right" are evaluated, and the direction that
+reduces loss more is stored on the node. No imputation is performed unless you do it
+yourself.
+
+```{r}
+x_missing <- x
+x_missing[1, "ph.ecog"] <- NA
+predict(cox_fit, x_missing[1:3, ], type = "link")
+```
