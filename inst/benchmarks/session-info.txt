@@ -1,0 +1,44 @@
+Date: 2026-07-29 12:13:50.966178
+R version: R version 4.5.1 (2025-06-13)
+OS: Linux 6.17.0-1030-oem
+Detected cores: 16
+survgbm version: 0.1.0
+gbm version: 2.3.1
+xgboost version: 3.2.1.1
+ranger version: 0.18.0
+biostatlab version: 0.0.1
+Seed base: 20260729
+ntrees: 200 max_depth: 5 learning_rate: 0.1 min_node_size: 10
+
+sessionInfo():
+R version 4.5.1 (2025-06-13)
+Platform: x86_64-pc-linux-gnu
+Running under: Ubuntu 24.04.3 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.12.0 
+LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.12.0  LAPACK version 3.12.0
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: Africa/Casablanca
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+[1] ranger_0.18.0    xgboost_3.2.1.1  gbm_2.3.1        survival_3.8-6  
+[5] biostatlab_0.0.1 survgbm_0.1.0   
+
+loaded via a namespace (and not attached):
+ [1] compiler_4.5.1        Matrix_1.7-3          parallel_4.5.1       
+ [4] tools_4.5.1           Rcpp_1.1.2            splines_4.5.1        
+ [7] grid_4.5.1            data.table_1.18.4     jsonlite_2.0.0       
+[10] RcppParallel_5.1.11-2 lattice_0.22-5       
