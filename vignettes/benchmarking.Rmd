@@ -7,4 +7,28 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-Benchmark scripts will be documented here.
+`inst/benchmarks/run-benchmark.R` reproduces a benchmark of `survgbm` against `gbm`,
+`xgboost`, and `ranger` on six real survival datasets from the `biostatlab` package
+(`pbc`, `heart_failure`, `breast`, `colon_cancer`, `crc_mondaca2020`, `framingham`),
+under an equal-hyperparameter-grid regime with repeated 70/30 train/test splits.
+
+```r
+# from the package root
+Rscript inst/benchmarks/run-benchmark.R
+```
+
+This writes, under `inst/benchmarks/`:
+
+* `benchmark-results.csv` -- one row per (dataset, model, repeat), with training time,
+  prediction time, and Harrell's C-index;
+* `benchmark-summary.csv` -- median/IQR per (dataset, model), plus paired
+  win/loss/tie counts of `survgbm` against each competitor;
+* `parallel-speedup.csv` -- `threads = 1` vs. `threads = <hardware concurrency>`
+  training time on the largest dataset (`framingham`);
+* `session-info.txt` -- R/package versions, OS, seed, and hyperparameters, for
+  reproducibility.
+
+The full write-up, with tables and figures generated directly from these CSVs, is in
+`paper/survgbm-benchmark.qmd` (renders to `survgbm-benchmark.pdf` via `quarto render`).
+Results are reported honestly (win/loss/tie per dataset), not as a universal
+superiority claim -- see the paper's Comparative Summary section.
