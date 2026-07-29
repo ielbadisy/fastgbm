@@ -33,3 +33,32 @@ test_that("formula interface expands factors", {
   p <- predict(fit, dat, type = "response")
   expect_length(p, nrow(dat))
 })
+
+test_that("cox survival objective trains and predicts survival curves", {
+  skip_if_not_installed("survival")
+  dat <- na.omit(as.data.frame(survival::lung[, c("time", "status", "age", "sex", "ph.ecog")]))
+  x <- model.matrix(~ age + sex + ph.ecog - 1, dat)
+  fit <- fastgbm(x, time = dat$time, status = dat$status, objective = "survival:cox", ntrees = 5L, learning_rate = 0.1, max_depth = 2L, min_node_size = 5L, seed = 5L, verbose = FALSE)
+  lp <- predict(fit, x, type = "link")
+  s <- predict(fit, x[1:8, , drop = FALSE], type = "survival", times = c(30, 90, 365))
+  expect_length(lp, nrow(x))
+  expect_equal(dim(s), c(8L, 3L))
+  expect_true(all(s >= 0 & s <= 1))
+  expect_gt(metrics(fit, y = survival::Surv(dat$time, dat$status))$value, 0.5)
+})
+
+test_that("aft survival objective trains and predicts survival curves", {
+  skip_if_not_installed("survival")
+  set.seed(2)
+  n <- 80
+  x <- matrix(rnorm(n * 3), ncol = 3)
+  time <- exp(1 + 0.5 * x[, 1] - 0.2 * x[, 2] + rnorm(n, sd = 0.25))
+  status <- rbinom(n, 1, 0.7)
+  fit <- fastgbm(x, time = time, status = status, objective = "survival:aft", ntrees = 5L, learning_rate = 0.1, max_depth = 2L, min_node_size = 5L, seed = 6L, verbose = FALSE)
+  lp <- predict(fit, x, type = "link")
+  s <- predict(fit, x[1:6, , drop = FALSE], type = "survival", times = c(1, 2, 3))
+  expect_length(lp, nrow(x))
+  expect_equal(dim(s), c(6L, 3L))
+  expect_true(all(s >= 0 & s <= 1))
+  expect_gt(metrics(fit, y = survival::Surv(time, status))$value, 0.4)
+})

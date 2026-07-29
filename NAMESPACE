@@ -1,6 +1,6 @@
 import(Rcpp)
 useDynLib(fastgbm, .registration = TRUE)
-importFrom(stats, model.frame, model.matrix, predict, terms, delete.response, na.omit, na.pass, as.formula, model.response, .getXlevels)
+importFrom(stats, approx, model.frame, model.matrix, predict, terms, delete.response, na.omit, na.pass, as.formula, model.response, .getXlevels, pnorm)
 importFrom(utils, head)
 export(fastgbm)
 export(save_fastgbm)

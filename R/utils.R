@@ -16,3 +16,7 @@ fastgbm_as_matrix <- function(x) {
 fastgbm_model_fields <- function(object) {
   c("objective", "ntrees", "learning_rate", "max_depth", "min_node_size")
 }
+
+`%||%` <- function(x, y) {
+  if (is.null(x)) y else x
+}
