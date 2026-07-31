@@ -1,4 +1,4 @@
-library(survgbm)
+library(fastgbm)
 library(survival)
 library(gbm)
 library(xgboost)
@@ -30,8 +30,8 @@ timed <- function(expr) {
 
 results <- list()
 
-fit_survgbm <- timed(
-  survgbm(
+fit_fastgbm <- timed(
+  fastgbm(
     x_train,
     time = train$time,
     status = train$status01,
@@ -44,12 +44,12 @@ fit_survgbm <- timed(
     verbose = FALSE
   )
 )
-pred_survgbm <- timed(predict(fit_survgbm$value, x_test, type = "link"))
+pred_fastgbm <- timed(predict(fit_fastgbm$value, x_test, type = "link"))
 results[[length(results) + 1L]] <- data.frame(
-  model = "survgbm",
-  train_sec = fit_survgbm$elapsed,
-  predict_sec = pred_survgbm$elapsed,
-  cindex = score_cindex(test$time, test$status01, pred_survgbm$value),
+  model = "fastgbm",
+  train_sec = fit_fastgbm$elapsed,
+  predict_sec = pred_fastgbm$elapsed,
+  cindex = score_cindex(test$time, test$status01, pred_fastgbm$value),
   stringsAsFactors = FALSE
 )
 

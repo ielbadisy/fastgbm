@@ -16,7 +16,7 @@ test_that("early stopping actually stops before ntrees given a validation set", 
   tr <- make_cox_data(300, 1)
   va <- make_cox_data(100, 2)
 
-  fit <- survgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
+  fit <- fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
                 ntrees = 500L, learning_rate = 0.1, max_depth = 4L, min_node_size = 10L,
                 validation = list(x = va$x, time = va$time, status = va$status),
                 early_stopping = 10L, threads = 1L, seed = 1L, verbose = FALSE)
@@ -32,7 +32,7 @@ test_that("early stopping actually stops before ntrees given a validation set", 
 
 test_that("without validation/early_stopping, behavior is unchanged (trains all ntrees)", {
   tr <- make_cox_data(150, 3)
-  fit <- survgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
+  fit <- fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
                 ntrees = 30L, learning_rate = 0.1, max_depth = 3L, min_node_size = 10L,
                 threads = 1L, seed = 1L, verbose = FALSE)
   expect_equal(fit$ntrees, 30L)
@@ -44,12 +44,12 @@ test_that("validation and early_stopping must be supplied together", {
   tr <- make_cox_data(80, 4)
   va <- make_cox_data(40, 5)
   expect_error(
-    survgbm(tr$x, time = tr$time, status = tr$status, objective = "cox", ntrees = 20L,
+    fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox", ntrees = 20L,
            validation = list(x = va$x, time = va$time, status = va$status), verbose = FALSE),
     "together"
   )
   expect_error(
-    survgbm(tr$x, time = tr$time, status = tr$status, objective = "cox", ntrees = 20L,
+    fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox", ntrees = 20L,
            early_stopping = 5L, verbose = FALSE),
     "together"
   )
@@ -58,14 +58,14 @@ test_that("validation and early_stopping must be supplied together", {
 test_that("predictions after truncation match manually truncating trees to best_iteration", {
   tr <- make_cox_data(300, 6)
   va <- make_cox_data(100, 7)
-  full_fit <- survgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
+  full_fit <- fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
                       ntrees = 500L, learning_rate = 0.1, max_depth = 4L, min_node_size = 10L,
                       validation = list(x = va$x, time = va$time, status = va$status),
                       early_stopping = 10L, threads = 1L, seed = 1L, verbose = FALSE)
 
   # Refit without early stopping, capped at n_trees_grown, then hand-truncate to
   # best_iteration the same way the diagnostic script does -- should match exactly.
-  raw_fit <- survgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
+  raw_fit <- fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
                      ntrees = full_fit$n_trees_grown, learning_rate = 0.1, max_depth = 4L,
                      min_node_size = 10L, threads = 1L, seed = 1L, verbose = FALSE)
   raw_fit$trees <- raw_fit$trees[seq_len(full_fit$best_iteration)]
@@ -84,7 +84,7 @@ test_that("early stopping on AFT trains and produces sane output", {
   va_time <- exp(1 + 0.5 * va_x[, 1] + rnorm(va_n, sd = 0.3))
   va_status <- rbinom(va_n, 1, 0.8)
 
-  fit <- survgbm(x, time = time, status = status, objective = "aft",
+  fit <- fastgbm(x, time = time, status = status, objective = "aft",
                 ntrees = 200L, learning_rate = 0.1, max_depth = 3L, min_node_size = 10L,
                 validation = list(x = va_x, time = va_time, status = va_status),
                 early_stopping = 10L, threads = 1L, seed = 1L, verbose = FALSE)
@@ -96,11 +96,11 @@ test_that("early stopping is deterministic across thread counts", {
   tr <- make_cox_data(400, 9)
   va <- make_cox_data(120, 10)
 
-  fit1 <- survgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
+  fit1 <- fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
                   ntrees = 200L, learning_rate = 0.1, max_depth = 4L, min_node_size = 5L,
                   validation = list(x = va$x, time = va$time, status = va$status),
                   early_stopping = 10L, threads = 1L, seed = 1L, verbose = FALSE)
-  fit4 <- survgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
+  fit4 <- fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
                   ntrees = 200L, learning_rate = 0.1, max_depth = 4L, min_node_size = 5L,
                   validation = list(x = va$x, time = va$time, status = va$status),
                   early_stopping = 10L, threads = 4L, seed = 1L, verbose = FALSE)

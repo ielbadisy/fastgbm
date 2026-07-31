@@ -1,6 +1,6 @@
 #' Feature importance (total split gain)
 #'
-#' @param object A fitted `survgbm` object.
+#' @param object A fitted `fastgbm` object.
 #' @param ... Unused.
 #' @return A `data.frame` with columns `feature` and `gain`, sorted by
 #'   decreasing gain.

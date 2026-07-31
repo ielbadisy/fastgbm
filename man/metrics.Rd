@@ -2,24 +2,27 @@
 % Please edit documentation in R/validation.R
 \name{metrics}
 \alias{metrics}
-\title{Harrell's C-index for a fitted survgbm model}
+\title{Evaluation metric for a fitted fastgbm model}
 \usage{
 metrics(object, newdata = NULL, y = NULL, type = c("response", "link"))
 }
 \arguments{
-\item{object}{A fitted `survgbm` object.}
+\item{object}{A fitted `fastgbm` object.}
 
 \item{newdata}{Optional new data.}
 
-\item{y}{Optional observed outcomes, as a `survival::Surv` object. If
-omitted, returns the requested predictions instead of a metric.}
+\item{y}{Optional observed outcomes: a `survival::Surv` object for
+survival objectives, or a numeric/logical/two-level-factor vector for
+`"regression"`/`"binary"`. If omitted, returns the requested predictions
+instead of a metric.}
 
 \item{type}{Prediction type used when `y` is omitted.}
 }
 \value{
-A list with `objective`, `metric` (`"cindex"`), and `value`, or a
-  numeric vector of predictions if `y` is omitted.
+A list with `objective`, `metric`, and `value`, or a numeric
+  vector of predictions if `y` is omitted.
 }
 \description{
-Harrell's C-index for a fitted survgbm model
+Harrell's C-index for survival objectives (`"cox"`, `"aft"`, `"pexp"`),
+RMSE for `"regression"`, and log loss for `"binary"`.
 }

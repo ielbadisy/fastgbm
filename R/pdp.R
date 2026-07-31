@@ -1,4 +1,4 @@
-#' Partial dependence for a fitted survgbm model
+#' Partial dependence for a fitted fastgbm model
 #'
 #' Computes Friedman's partial dependence of the model's prediction on a
 #' single feature: for each value on a grid, the feature column is replaced
@@ -11,7 +11,7 @@
 #' "survival")` directly if a probability-scale summary at specific horizons
 #' is needed.
 #'
-#' @param object a fitted `survgbm` model.
+#' @param object a fitted `fastgbm` model.
 #' @param feature name of the feature (column of `data`) to profile.
 #' @param data the data used to compute the partial dependence average;
 #'   typically the training data, in the same representation (matrix or
@@ -22,12 +22,12 @@
 #' @param type `"response"` or `"link"`; defaults to `"link"` (the risk/location
 #'   score).
 #'
-#' @return a `data.frame` with class `survgbm_pdp` and columns `feature`,
+#' @return a `data.frame` with class `fastgbm_pdp` and columns `feature`,
 #'   `x` (grid value) and `yhat` (average prediction).
 #' @export
 pdp <- function(object, feature, data, grid_resolution = 20L, type = NULL) {
-  if (!inherits(object, "survgbm")) {
-    stop("`object` must be a fitted `survgbm` model.", call. = FALSE)
+  if (!inherits(object, "fastgbm")) {
+    stop("`object` must be a fitted `fastgbm` model.", call. = FALSE)
   }
   if (!feature %in% colnames(data)) {
     stop("`feature` (\"", feature, "\") was not found in `colnames(data)`.", call. = FALSE)
@@ -56,14 +56,14 @@ pdp <- function(object, feature, data, grid_resolution = 20L, type = NULL) {
   }, numeric(1))
 
   out <- data.frame(feature = feature, x = grid, yhat = yhat, stringsAsFactors = FALSE)
-  class(out) <- c("survgbm_pdp", "data.frame")
+  class(out) <- c("fastgbm_pdp", "data.frame")
   attr(out, "pdp_type") <- type
   attr(out, "objective") <- object$objective
   out
 }
 
 #' @export
-plot.survgbm_pdp <- function(x, ...) {
+plot.fastgbm_pdp <- function(x, ...) {
   ylab <- paste0("Partial dependence (", attr(x, "pdp_type"), ")")
   xlab <- x$feature[1]
   if (requireNamespace("ggplot2", quietly = TRUE)) {

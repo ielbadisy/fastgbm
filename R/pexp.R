@@ -1,11 +1,11 @@
 ## Piecewise-exponential (PEM) helpers: person-time expansion for fitting, and
 ## multi-interval evaluation for prediction. The gradient/Hessian this rests on
-## (src/survgbm.cpp: compute_pexp_grad_hess/compute_pexp_loss) is an ordinary
+## (src/fastgbm.cpp: compute_pexp_grad_hess/compute_pexp_loss) is an ordinary
 ## Poisson-with-offset objective evaluated on the expanded data -- validated
 ## against finite differences and a Poisson-GLM equivalence check in
 ## tests/testthat/test-pexp.R.
 
-survgbm_pexp_cutpoints <- function(time, status, bins = 10L) {
+fastgbm_pexp_cutpoints <- function(time, status, bins = 10L) {
   event_times <- time[status == 1L]
   if (length(unique(event_times)) < 2L) event_times <- time
   probs <- seq(0, 1, length.out = bins + 1L)
@@ -22,7 +22,7 @@ survgbm_pexp_cutpoints <- function(time, status, bins = 10L) {
 # actual event, else 0). Appends log(interval midpoint) as an extra feature
 # column, so the boosted ensemble models the hazard's shape over time jointly
 # with the covariates rather than assuming a fixed post-hoc baseline.
-survgbm_expand_person_time <- function(x, time, status, cutpoints) {
+fastgbm_expand_person_time <- function(x, time, status, cutpoints) {
   n <- nrow(x)
   nbins <- length(cutpoints) - 1L
   subject_list <- vector("list", n)
@@ -52,7 +52,7 @@ survgbm_expand_person_time <- function(x, time, status, cutpoints) {
 # is piecewise-constant, so H accrues linearly within an interval), and
 # extrapolates past the model's last cutpoint by holding the final interval's
 # hazard rate constant.
-survgbm_pexp_cumhaz <- function(object, x, times) {
+fastgbm_pexp_cumhaz <- function(object, x, times) {
   cutpoints <- object$pexp_cutpoints
   nbins <- length(cutpoints) - 1L
   midpoints <- (cutpoints[-length(cutpoints)] + cutpoints[-1]) / 2
@@ -61,7 +61,7 @@ survgbm_pexp_cumhaz <- function(object, x, times) {
   x_rep <- x[rep(seq_len(n), times = nbins), , drop = FALSE]
   time_rep <- rep(log(midpoints), each = n)
   x_eval <- cbind(x_rep, log_time_mid = time_rep)
-  pred <- .Call("survgbm_predict_cpp", object, x_eval, "link")
+  pred <- .Call("fastgbm_predict_cpp", object, x_eval, "link")
   hazard <- matrix(exp(pred), nrow = n, ncol = nbins)
 
   widths <- diff(cutpoints)

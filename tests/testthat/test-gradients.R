@@ -1,5 +1,5 @@
 ## Verify the compiled gradient/Hessian kernels (exposed via the internal
-## `survgbm_grad_hess()` test hook, src/survgbm.cpp) against finite-difference
+## `fastgbm_grad_hess()` test hook, src/fastgbm.cpp) against finite-difference
 ## derivatives of the *stated* loss for each objective. This checks the actual
 ## compiled math, not a hand-written R re-implementation of it.
 
@@ -31,7 +31,7 @@ test_that("Cox (Breslow) gradient/Hessian match finite differences of the negati
     }, numeric(1)))
   }
 
-  gh <- survgbm:::survgbm_grad_hess(pred, time = time, status = status, objective = "cox")
+  gh <- fastgbm:::fastgbm_grad_hess(pred, time = time, status = status, objective = "cox")
   for (i in seq_along(pred)) {
     expect_equal(gh$grad[i], numgrad(neg_log_partial_lik, pred, i), tolerance = 1e-4)
     expect_equal(gh$hess[i], numhess(neg_log_partial_lik, pred, i), tolerance = 5e-3)
@@ -57,7 +57,7 @@ test_that("AFT (normal) gradient/Hessian match finite differences of the negativ
     -sum(ll)
   }
 
-  gh <- survgbm:::survgbm_grad_hess(pred, time = time, status = status, objective = "aft")
+  gh <- fastgbm:::fastgbm_grad_hess(pred, time = time, status = status, objective = "aft")
   for (i in seq_along(pred)) {
     expect_equal(gh$grad[i], numgrad(neg_log_lik, pred, i), tolerance = 1e-4)
     expect_equal(gh$hess[i], numhess(neg_log_lik, pred, i), tolerance = 5e-3)
@@ -79,9 +79,44 @@ test_that("piecewise-exponential (Poisson-trick) gradient/Hessian match finite d
     sum(mean_i - event * p)  # dropping the event*log(exposure) constant, as in compute_pexp_loss
   }
 
-  gh <- survgbm:::survgbm_grad_hess(pred, time = exposure, status = event, objective = "pexp")
+  gh <- fastgbm:::fastgbm_grad_hess(pred, time = exposure, status = event, objective = "pexp")
   for (i in seq_along(pred)) {
     expect_equal(gh$grad[i], numgrad(neg_poisson_loglik, pred, i), tolerance = 1e-4)
     expect_equal(gh$hess[i], numhess(neg_poisson_loglik, pred, i), tolerance = 5e-3)
+  }
+})
+
+test_that("regression (squared error) gradient/Hessian match finite differences", {
+  ## `y` (the regression target) travels in the "time" argument slot, same
+  ## convention as pexp's exposure; "status" is unused for this objective.
+  set.seed(5)
+  n <- 10
+  y <- rnorm(n)
+  pred <- rnorm(n, sd = 0.4)
+
+  half_sq_err <- function(p) sum(0.5 * (p - y)^2)
+
+  gh <- fastgbm:::fastgbm_grad_hess(pred, time = y, status = integer(n), objective = "regression")
+  for (i in seq_along(pred)) {
+    expect_equal(gh$grad[i], numgrad(half_sq_err, pred, i), tolerance = 1e-4)
+    expect_equal(gh$hess[i], numhess(half_sq_err, pred, i), tolerance = 5e-3)
+  }
+})
+
+test_that("binary (logistic) gradient/Hessian match finite differences", {
+  set.seed(6)
+  n <- 10
+  y <- rbinom(n, 1, 0.5)
+  pred <- rnorm(n, sd = 0.4)
+
+  neg_log_lik <- function(p) {
+    prob <- 1 / (1 + exp(-p))
+    -sum(y * log(prob) + (1 - y) * log(1 - prob))
+  }
+
+  gh <- fastgbm:::fastgbm_grad_hess(pred, time = y, status = integer(n), objective = "binary")
+  for (i in seq_along(pred)) {
+    expect_equal(gh$grad[i], numgrad(neg_log_lik, pred, i), tolerance = 1e-4)
+    expect_equal(gh$hess[i], numhess(neg_log_lik, pred, i), tolerance = 5e-3)
   }
 })

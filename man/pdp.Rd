@@ -2,12 +2,12 @@
 % Please edit documentation in R/pdp.R
 \name{pdp}
 \alias{pdp}
-\title{Partial dependence for a fitted survgbm model}
+\title{Partial dependence for a fitted fastgbm model}
 \usage{
 pdp(object, feature, data, grid_resolution = 20L, type = NULL)
 }
 \arguments{
-\item{object}{a fitted `survgbm` model.}
+\item{object}{a fitted `fastgbm` model.}
 
 \item{feature}{name of the feature (column of `data`) to profile.}
 
@@ -23,7 +23,7 @@ or character features, where every level is used.}
 score).}
 }
 \value{
-a `data.frame` with class `survgbm_pdp` and columns `feature`,
+a `data.frame` with class `fastgbm_pdp` and columns `feature`,
   `x` (grid value) and `yhat` (average prediction).
 }
 \description{

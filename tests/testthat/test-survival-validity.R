@@ -16,7 +16,7 @@ test_that("Breslow baseline cumulative hazard matches survival::basehaz exactly 
   lp_uncentered <- as.numeric(x1 * coef(cfit))
   bh <- survival::basehaz(cfit, centered = FALSE)
 
-  myb <- survgbm:::survgbm_survival_baseline(time, status, lp_uncentered)
+  myb <- fastgbm:::fastgbm_survival_baseline(time, status, lp_uncentered)
 
   common <- intersect(round(bh$time, 6), round(myb$times, 6))
   expect_equal(length(common), length(myb$times))
@@ -31,7 +31,7 @@ test_that("baseline cumulative hazard is non-decreasing and risk set shrinks ove
   time <- sort(rexp(n))
   status <- rbinom(n, 1, 0.7)
   lp <- rnorm(n, sd = 0.3)
-  b <- survgbm:::survgbm_survival_baseline(time, status, lp)
+  b <- fastgbm:::fastgbm_survival_baseline(time, status, lp)
   expect_true(all(diff(b$cumhaz) >= 0))
   # a later event time must never have a larger at-risk set than an earlier one
   et <- exp(lp)
@@ -40,7 +40,7 @@ test_that("baseline cumulative hazard is non-decreasing and risk set shrinks ove
   expect_true(all(diff(risks) <= 1e-8))
 })
 
-test_that("survgbm Cox risk score is directionally concordant with coxph on a proportional-hazards DGP", {
+test_that("fastgbm Cox risk score is directionally concordant with coxph on a proportional-hazards DGP", {
   skip_if_not_installed("survival")
   set.seed(7)
   n <- 300
@@ -56,14 +56,14 @@ test_that("survgbm Cox risk score is directionally concordant with coxph on a pr
   cfit <- survival::coxph(survival::Surv(time, status) ~ x1 + x2)
   cox_lp <- predict(cfit, type = "lp")
 
-  fit <- survgbm(x, time = time, status = status, objective = "cox",
+  fit <- fastgbm(x, time = time, status = status, objective = "cox",
                  ntrees = 100L, learning_rate = 0.05, max_depth = 3L, min_node_size = 10L,
                  seed = 1L, verbose = FALSE)
-  survgbm_lp <- predict(fit, x, type = "link")
+  fastgbm_lp <- predict(fit, x, type = "link")
 
   # A well-specified boosted Cox model should rank observations similarly to the
   # (correctly-specified, linear) coxph model, and both should discriminate well.
-  expect_gt(cor(survgbm_lp, cox_lp, method = "spearman"), 0.6)
-  expect_gt(survgbm:::survival_cindex(time, status, survgbm_lp), 0.65)
-  expect_gt(survgbm:::survival_cindex(time, status, cox_lp), 0.65)
+  expect_gt(cor(fastgbm_lp, cox_lp, method = "spearman"), 0.6)
+  expect_gt(fastgbm:::survival_cindex(time, status, fastgbm_lp), 0.65)
+  expect_gt(fastgbm:::survival_cindex(time, status, cox_lp), 0.65)
 })

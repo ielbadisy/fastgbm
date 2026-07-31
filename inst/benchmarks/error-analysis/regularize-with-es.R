@@ -5,7 +5,7 @@
 ## was untested.
 
 suppressPackageStartupMessages({
-  library(survgbm)
+  library(fastgbm)
   library(biostatlab)
   library(survival)
 })
@@ -93,7 +93,7 @@ run_once <- function(x, time, status, seed, subsample, has_missing) {
   time_tr2 <- time_tr[es_split$train]; time_val <- time_tr[es_split$test]
   status_tr2 <- status_tr[es_split$train]; status_val <- status_tr[es_split$test]
 
-  fit <- survgbm(x_tr2, time = time_tr2, status = status_tr2, objective = "cox",
+  fit <- fastgbm(x_tr2, time = time_tr2, status = status_tr2, objective = "cox",
                  ntrees = 200L, learning_rate = 0.1, max_depth = 5L, min_node_size = 10L,
                  subsample = subsample, colsample = 0.8,
                  validation = list(x = x_val, time = time_val, status = status_val),

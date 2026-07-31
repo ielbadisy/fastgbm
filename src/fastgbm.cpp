@@ -288,6 +288,55 @@ static inline double safe_exp(double x) {
   return std::exp(std::max(-35.0, std::min(35.0, x)));
 }
 
+static inline double sigmoid(double x) {
+  if (x > 35.0) return 1.0;
+  if (x < -35.0) return 0.0;
+  return 1.0 / (1.0 + std::exp(-x));
+}
+
+// `y` (the regression target / 0-1 class label) travels in the same argument
+// slot as survival `time`, exactly like the pexp objective reuses it for
+// exposure -- these two objectives never use time-to-event data, so no new
+// R<->C++ argument is needed.
+static void compute_gaussian_grad_hess(const NumericVector& pred, const NumericVector& y,
+                                       NumericVector& grad, NumericVector& hess) {
+  int n = pred.size();
+  for (int i = 0; i < n; ++i) {
+    grad[i] = pred[i] - y[i];
+    hess[i] = 1.0;
+  }
+}
+
+static void compute_logistic_grad_hess(const NumericVector& pred, const NumericVector& y,
+                                       NumericVector& grad, NumericVector& hess) {
+  int n = pred.size();
+  for (int i = 0; i < n; ++i) {
+    double p_i = sigmoid(pred[i]);
+    grad[i] = p_i - y[i];
+    hess[i] = std::max(1e-6, p_i * (1.0 - p_i));
+  }
+}
+
+static double compute_gaussian_loss(const NumericVector& pred, const NumericVector& y) {
+  int n = pred.size();
+  double loss = 0.0;
+  for (int i = 0; i < n; ++i) {
+    double d = pred[i] - y[i];
+    loss += 0.5 * d * d;
+  }
+  return loss;
+}
+
+static double compute_logistic_loss(const NumericVector& pred, const NumericVector& y) {
+  int n = pred.size();
+  double loss = 0.0;
+  for (int i = 0; i < n; ++i) {
+    double p_i = std::min(std::max(sigmoid(pred[i]), 1e-15), 1.0 - 1e-15);
+    loss += -(y[i] * std::log(p_i) + (1.0 - y[i]) * std::log(1.0 - p_i));
+  }
+  return loss;
+}
+
 static void compute_cox_grad_hess(const NumericVector& pred, const NumericVector& time,
                                   const IntegerVector& status, NumericVector& grad,
                                   NumericVector& hess) {
@@ -375,7 +424,7 @@ static void compute_aft_grad_hess(const NumericVector& pred, const NumericVector
 
 // Piecewise-exponential (PEM) objective, via the standard "Poisson trick": on
 // person-time-expanded data (one row per subject-interval; see
-// R/pexp.R:survgbm_expand_person_time()), `time` holds each row's exposure
+// R/pexp.R:fastgbm_expand_person_time()), `time` holds each row's exposure
 // (time at risk within that interval) and `status` holds its event indicator
 // (1 if the subject's actual event fell in that interval, else 0). The model
 // predicts the log hazard rate for the row; the Poisson mean is
@@ -475,7 +524,7 @@ static double compute_aft_loss(const NumericVector& pred, const NumericVector& t
 // Internal test hook: exposes the compiled gradient/Hessian formulas directly so R-level
 // tests can verify them against finite-difference references without duplicating the C++
 // math by hand. Not part of the public API.
-extern "C" SEXP survgbm_grad_hess_cpp(SEXP predSEXP, SEXP timeSEXP, SEXP statusSEXP, SEXP objectiveSEXP) {
+extern "C" SEXP fastgbm_grad_hess_cpp(SEXP predSEXP, SEXP timeSEXP, SEXP statusSEXP, SEXP objectiveSEXP) {
   BEGIN_RCPP
   NumericVector pred(predSEXP);
   NumericVector time(timeSEXP);
@@ -487,6 +536,10 @@ extern "C" SEXP survgbm_grad_hess_cpp(SEXP predSEXP, SEXP timeSEXP, SEXP statusS
     compute_aft_grad_hess(pred, time, status, grad, hess, 1.0);
   } else if (objective == "pexp") {
     compute_pexp_grad_hess(pred, time, status, grad, hess);
+  } else if (objective == "regression") {
+    compute_gaussian_grad_hess(pred, time, grad, hess);
+  } else if (objective == "binary") {
+    compute_logistic_grad_hess(pred, time, grad, hess);
   } else {
     compute_cox_grad_hess(pred, time, status, grad, hess);
   }
@@ -494,7 +547,7 @@ extern "C" SEXP survgbm_grad_hess_cpp(SEXP predSEXP, SEXP timeSEXP, SEXP statusS
   END_RCPP
 }
 
-extern "C" SEXP survgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
+extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
                                 SEXP objectiveSEXP, SEXP ntreesSEXP, SEXP learning_rateSEXP,
                                 SEXP max_depthSEXP, SEXP min_node_sizeSEXP, SEXP max_binsSEXP,
                                 SEXP subsampleSEXP, SEXP colsampleSEXP, SEXP lambdaSEXP,
@@ -590,6 +643,15 @@ extern "C" SEXP survgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
       total_exposure += time[i];
     }
     init_score = std::log(std::max(total_event, 1e-6) / std::max(total_exposure, 1e-12));
+  } else if (objective == "regression") {
+    double sum_y = 0.0;
+    for (int i = 0; i < n; ++i) sum_y += time[i];
+    init_score = sum_y / std::max(1, n);
+  } else if (objective == "binary") {
+    double sum_y = 0.0;
+    for (int i = 0; i < n; ++i) sum_y += time[i];
+    double p = std::min(std::max(sum_y / std::max(1, n), 1e-6), 1.0 - 1e-6);
+    init_score = std::log(p / (1.0 - p));
   }
   // Cox has no intercept in the partial likelihood: init_score stays 0.
   std::fill(pred.begin(), pred.end(), init_score);
@@ -616,6 +678,10 @@ extern "C" SEXP survgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
       compute_aft_grad_hess(pred, time, status, grad, hess, 1.0);
     } else if (objective == "pexp") {
       compute_pexp_grad_hess(pred, time, status, grad, hess);
+    } else if (objective == "regression") {
+      compute_gaussian_grad_hess(pred, time, grad, hess);
+    } else if (objective == "binary") {
+      compute_logistic_grad_hess(pred, time, grad, hess);
     } else {
       compute_cox_grad_hess(pred, time, status, grad, hess);
     }
@@ -643,6 +709,10 @@ extern "C" SEXP survgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
         val_loss = compute_aft_loss(pred_valid, time_valid, status_valid, 1.0);
       } else if (objective == "pexp") {
         val_loss = compute_pexp_loss(pred_valid, time_valid, status_valid);
+      } else if (objective == "regression") {
+        val_loss = compute_gaussian_loss(pred_valid, time_valid);
+      } else if (objective == "binary") {
+        val_loss = compute_logistic_loss(pred_valid, time_valid);
       } else {
         val_loss = compute_cox_loss(pred_valid, time_valid, status_valid);
       }
@@ -711,7 +781,7 @@ extern "C" SEXP survgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
   END_RCPP
 }
 
-extern "C" SEXP survgbm_predict_cpp(SEXP modelSEXP, SEXP xSEXP, SEXP typeSEXP) {
+extern "C" SEXP fastgbm_predict_cpp(SEXP modelSEXP, SEXP xSEXP, SEXP typeSEXP) {
   BEGIN_RCPP
   (void)typeSEXP;  // reserved for future prediction-type variants (e.g. per-tree contributions)
   List model(modelSEXP);
@@ -760,7 +830,7 @@ extern "C" SEXP survgbm_predict_cpp(SEXP modelSEXP, SEXP xSEXP, SEXP typeSEXP) {
   END_RCPP
 }
 
-extern "C" SEXP survgbm_importance_cpp(SEXP modelSEXP) {
+extern "C" SEXP fastgbm_importance_cpp(SEXP modelSEXP) {
   BEGIN_RCPP
   List model(modelSEXP);
   NumericVector imp = model["feature_importance"];

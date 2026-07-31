@@ -1,7 +1,7 @@
-## Error-analysis diagnostics for survgbm: where does it lose to ranger, and why?
+## Error-analysis diagnostics for fastgbm: where does it lose to ranger, and why?
 ## Three parts, run per dataset:
 ##   1. Learning curve: train/test C-index vs. ntrees (checks over/underfitting).
-##   2. Per-observation discordance: which subject pairs does survgbm rank wrong
+##   2. Per-observation discordance: which subject pairs does fastgbm rank wrong
 ##      that ranger ranks right, and what do those subjects have in common.
 ##   3. A quick regularization probe: does subsample/colsample < 1 (bagging-like)
 ##      close any of the gap.
@@ -9,7 +9,7 @@
 ## Run from the package root: Rscript inst/benchmarks/error-analysis/diagnose.R
 
 suppressPackageStartupMessages({
-  library(survgbm)
+  library(fastgbm)
   library(biostatlab)
   library(survival)
   library(ranger)
@@ -112,7 +112,7 @@ learning_curve <- function(x, time, status, seed) {
   time_tr <- time[sp$train]; time_te <- time[sp$test]
   status_tr <- status[sp$train]; status_te <- status[sp$test]
 
-  fit <- survgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
+  fit <- fastgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
                  ntrees = NTREES_MAX, learning_rate = 0.1, max_depth = 5L,
                  min_node_size = 10L, threads = 1L, seed = seed, verbose = FALSE)
 
@@ -144,7 +144,7 @@ discordant_pairs <- function(x, time, status, seed, has_missing = FALSE) {
   df_tr <- as.data.frame(x_tr_c); df_tr$.time <- time_tr; df_tr$.status <- status_tr
   df_te <- as.data.frame(x_te_c)
 
-  fit <- survgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
+  fit <- fastgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
                  ntrees = 200L, learning_rate = 0.1, max_depth = 5L,
                  min_node_size = 10L, threads = 1L, seed = seed, verbose = FALSE)
   risk_sg <- predict(fit, x_te, type = "link")
@@ -200,7 +200,7 @@ regularization_probe <- function(x, time, status, seed) {
   for (nm in names(configs)) {
     cfg <- configs[[nm]]
     cvals <- sapply(1:5, function(rep_seed) {
-      fit <- survgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
+      fit <- fastgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
                      ntrees = 200L, learning_rate = 0.1, max_depth = 5L, min_node_size = 10L,
                      subsample = cfg$subsample, colsample = cfg$colsample,
                      threads = 1L, seed = seed + rep_seed, verbose = FALSE)
@@ -229,7 +229,7 @@ for (name in names(DATASETS)) {
   message("-- discordance vs ranger --")
   disc <- discordant_pairs(d$x, d$time, d$status, SEED, has_missing = isTRUE(d$has_missing))
   cat("n test subjects:", length(disc$time_te), "\n")
-  cat("n pairs where survgbm wrong but ranger right:", disc$n_disagreements, "\n")
+  cat("n pairs where fastgbm wrong but ranger right:", disc$n_disagreements, "\n")
   cat("top 'problem' subjects (row index in test set, count of discordant pairs involved):\n")
   print(head(disc$problem_subject_counts, 10))
   if (length(disc$problem_subject_counts)) {

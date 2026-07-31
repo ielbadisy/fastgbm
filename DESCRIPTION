@@ -1,15 +1,16 @@
-Package: survgbm
+Package: fastgbm
 Type: Package
-Title: Compact Histogram Gradient Boosting for Survival Analysis
+Title: Compact Histogram Gradient Boosting for Regression, Classification, and Survival Analysis
 Version: 0.1.0
 Authors@R: person("Imad", "El-Badisy", email = "elbadisyimad@gmail.com", role = c("aut", "cre"))
-Author: Imad El-Badisy
-Maintainer: Imad El-Badisy <elbadisyimad@gmail.com>
-Description: A compact, survival-analysis-only gradient boosting machine with
-    a compiled (Rcpp) backend. Supports Cox (Breslow ties) and accelerated
-    failure time (normal location-scale) objectives, native missing-value
-    routing, baseline-hazard estimation, and survival-probability prediction,
-    with deterministic multi-threaded training via RcppParallel.
+Description: A compact gradient boosting machine with a compiled (Rcpp)
+    backend, covering three task types with one interface: regression
+    (squared error), binary classification (logistic), and right-censored
+    survival analysis via Cox (Breslow ties), accelerated failure time
+    (normal location-scale), or piecewise-exponential objectives. Provides
+    native missing-value routing, baseline-hazard estimation and
+    survival-probability prediction for the survival objectives, and
+    deterministic multi-threaded training via RcppParallel.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.5.0)

@@ -7,7 +7,7 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-`survgbm` implements second-order (Newton) gradient boosting with histogram-based
+`fastgbm` implements second-order (Newton) gradient boosting with histogram-based
 split search.
 
 ## Objectives

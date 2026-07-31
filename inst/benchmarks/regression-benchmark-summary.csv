@@ -1,0 +1,8 @@
+"dataset","task","model","n_reps","train_sec_median","train_sec_q25","train_sec_q75","predict_sec_median","predict_sec_q25","predict_sec_q75","metric_name","metric_median","metric_q25","metric_q75"
+"friedman1","regression","fastgbm",10,0.107499999999999,0.0942499999999997,0.1185,0.00399999999999956,0.00324999999999998,0.00399999999999989,"rmse",1.38782685722014,1.33094271463123,1.42284702067068
+"friedman1","regression","gbm",10,0.1425,0.141,0.144,0.00399999999999956,0.00399999999999823,0.00399999999999989,"rmse",1.28145525950329,1.24107827910019,1.33322084308326
+"friedman1","regression","xgboost",10,0.194,0.193000000000001,0.1965,0.00200000000000067,0.00199999999999889,0.0027500000000007,"rmse",1.38750339256764,1.3551554609215,1.44221566089742
+"friedman1","regression","ranger",10,0.103000000000001,0.100250000000002,0.105499999999999,0.00900000000000034,0.00799999999999956,0.00900000000000034,"rmse",2.59372169878696,2.50349015458136,2.61504942330073
+"friedman1","regression","fastgbm_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; rmse_win/loss/tie=0/10/0",NA,NA,NA
+"friedman1","regression","fastgbm_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; rmse_win/loss/tie=6/4/0",NA,NA,NA
+"friedman1","regression","fastgbm_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=4/6/0; rmse_win/loss/tie=10/0/0",NA,NA,NA

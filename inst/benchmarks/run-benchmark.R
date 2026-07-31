@@ -1,4 +1,4 @@
-## Reproducible benchmark: survgbm vs gbm, xgboost, ranger on 6 biostatlab
+## Reproducible benchmark: fastgbm vs gbm, xgboost, ranger on 6 biostatlab
 ## survival datasets. Follows the "equal hyperparameter grid" regime (spec
 ## Regime A): every package is given the same ntrees/depth/learning-rate/
 ## min-node-size where the parameter exists, not independently tuned.
@@ -15,7 +15,7 @@
 ## Run from the package root: Rscript inst/benchmarks/run-benchmark.R
 
 suppressPackageStartupMessages({
-  library(survgbm)
+  library(fastgbm)
   library(biostatlab)
   library(survival)
   library(gbm)
@@ -157,11 +157,11 @@ run_survival_once <- function(x, time, status, seed, has_missing = FALSE) {
 
   rows <- list()
 
-  # survgbm gets an internal validation split carved out of its own training fold and
+  # fastgbm gets an internal validation split carved out of its own training fold and
   # uses early stopping (ntrees = NTREES is a ceiling, not a fixed count) -- this is a
   # real capability the package is meant to have, not extra tuning; the other three
   # packages are left at their fixed-ntrees defaults, same as before. Diagnostics
-  # (inst/benchmarks/error-analysis/diagnose.R) showed survgbm's test C-index peaks
+  # (inst/benchmarks/error-analysis/diagnose.R) showed fastgbm's test C-index peaks
   # well before ntrees=200 on every one of these datasets without early stopping.
   # All three implemented objectives are benchmarked, not just Cox: predict(type="link")
   # and metrics()/the cindex() helper below already handle each objective's own risk-score
@@ -173,14 +173,14 @@ run_survival_once <- function(x, time, status, seed, has_missing = FALSE) {
   status_tr2 <- status_tr[es_split$train]; status_val <- status_tr[es_split$test]
 
   for (obj in c("cox", "aft", "pexp")) {
-    ft <- timed(survgbm(x_tr2, time = time_tr2, status = status_tr2, objective = obj,
+    ft <- timed(fastgbm(x_tr2, time = time_tr2, status = status_tr2, objective = obj,
                         ntrees = NTREES, learning_rate = LR, max_depth = MAX_DEPTH,
                         min_node_size = MIN_NODE,
                         validation = list(x = x_val, time = time_val, status = status_val),
                         early_stopping = 20L, threads = 1L, seed = seed, verbose = FALSE))
     pt <- timed(predict(ft$value, x_te, type = "link"))
     risk_score <- if (obj == "aft") -pt$value else pt$value
-    model_name <- paste0("survgbm_", obj)
+    model_name <- paste0("fastgbm_", obj)
     rows[[model_name]] <- data.frame(model = model_name, train_sec = ft$elapsed, predict_sec = pt$elapsed,
                                      metric = cindex(risk_score))
   }
@@ -194,7 +194,7 @@ run_survival_once <- function(x, time, status, seed, has_missing = FALSE) {
                          metric = cindex(pg$value))
 
   # xgboost/ranger require complete data for training; median-impute for those
-  # two arms only when the dataset has real missingness (survgbm and gbm both
+  # two arms only when the dataset has real missingness (fastgbm and gbm both
   # handle missing predictors natively and use the unimputed data above).
   x_tr_c <- if (has_missing) impute_median_mode(x_tr) else x_tr
   x_te_c <- if (has_missing) impute_median_mode(x_te) else x_te
@@ -279,21 +279,21 @@ for (ds in unique(results$dataset)) {
       metric_q25 = metric_agg["q25"], metric_q75 = metric_agg["q75"]
     )
   }
-  # paired win/loss/tie of each survgbm objective vs each competitor, per repeat,
+  # paired win/loss/tie of each fastgbm objective vs each competitor, per repeat,
   # on train speed and C-index
-  survgbm_models <- grep("^survgbm_", unique(sub$model), value = TRUE)
-  competitors <- setdiff(unique(sub$model), survgbm_models)
-  for (fg_model in survgbm_models) {
+  fastgbm_models <- grep("^fastgbm_", unique(sub$model), value = TRUE)
+  competitors <- setdiff(unique(sub$model), fastgbm_models)
+  for (fg_model in fastgbm_models) {
     fg <- sub[sub$model == fg_model, ][order(sub[sub$model == fg_model, ]$rep), ]
     for (model in competitors) {
       other <- sub[sub$model == model, ][order(sub[sub$model == model, ]$rep), ]
       m <- merge(fg[, c("rep", "train_sec", "metric")],
-                other[, c("rep", "train_sec", "metric")], by = "rep", suffixes = c("_survgbm", "_other"))
-      speed_win <- sum(m$train_sec_survgbm < m$train_sec_other)
-      speed_loss <- sum(m$train_sec_survgbm > m$train_sec_other)
+                other[, c("rep", "train_sec", "metric")], by = "rep", suffixes = c("_fastgbm", "_other"))
+      speed_win <- sum(m$train_sec_fastgbm < m$train_sec_other)
+      speed_loss <- sum(m$train_sec_fastgbm > m$train_sec_other)
       speed_tie <- nrow(m) - speed_win - speed_loss
-      metric_win <- sum(m$metric_survgbm > m$metric_other)
-      metric_loss <- sum(m$metric_survgbm < m$metric_other)
+      metric_win <- sum(m$metric_fastgbm > m$metric_other)
+      metric_loss <- sum(m$metric_fastgbm < m$metric_other)
       metric_tie <- nrow(m) - metric_win - metric_loss
       summary_rows[[length(summary_rows) + 1L]] <- data.frame(
         dataset = ds, task = unique(sub$task), model = paste0(fg_model, "_vs_", model),
@@ -324,10 +324,10 @@ for (rep in seq_len(5L)) {
   x_tr <- d$x[sp$train, , drop = FALSE]
   time_tr <- d$time[sp$train]; status_tr <- d$status[sp$train]
 
-  t1 <- timed(survgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
+  t1 <- timed(fastgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
                       ntrees = NTREES, learning_rate = LR, max_depth = MAX_DEPTH,
                       min_node_size = MIN_NODE, threads = 1L, seed = seed, verbose = FALSE))
-  tn <- timed(survgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
+  tn <- timed(fastgbm(x_tr, time = time_tr, status = status_tr, objective = "cox",
                       ntrees = NTREES, learning_rate = LR, max_depth = MAX_DEPTH,
                       min_node_size = MIN_NODE, threads = n_cores, seed = seed, verbose = FALSE))
   parallel_rows[[rep]] <- data.frame(rep = rep, threads_1_sec = t1$elapsed, threads_n_sec = tn$elapsed, n_cores = n_cores)
@@ -344,7 +344,7 @@ writeLines(c(
   paste("R version:", R.version.string),
   paste("OS:", Sys.info()["sysname"], Sys.info()["release"]),
   paste("Detected cores:", n_cores),
-  paste("survgbm version:", as.character(utils::packageVersion("survgbm"))),
+  paste("fastgbm version:", as.character(utils::packageVersion("fastgbm"))),
   paste("gbm version:", as.character(utils::packageVersion("gbm"))),
   paste("xgboost version:", as.character(utils::packageVersion("xgboost"))),
   paste("ranger version:", as.character(utils::packageVersion("ranger"))),

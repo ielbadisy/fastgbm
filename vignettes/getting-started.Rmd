@@ -11,20 +11,26 @@ vignette: >
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
-`survgbm` is a compact gradient boosting engine for right-censored survival data, with
-a compiled (Rcpp + RcppParallel) backend, native missing-value routing, and Cox or
-accelerated failure time (AFT) objectives.
+`fastgbm` is a compact gradient boosting engine with a compiled (Rcpp +
+RcppParallel) backend, covering three task types with one interface:
+regression (squared error), binary classification (logistic), and
+right-censored survival analysis (Cox, AFT, or piecewise-exponential
+objectives), with native missing-value routing throughout. See
+`vignette("regression")`, `vignette("classification")`, and
+`vignette("survival")` for task-specific examples; this vignette walks
+through the survival interface end to end since it has the most moving
+parts (baseline hazard, survival-probability prediction).
 
 ## Matrix interface
 
 ```{r}
-library(survgbm)
+library(fastgbm)
 library(survival)
 
 lung_dat <- na.omit(lung[, c("time", "status", "age", "sex", "ph.ecog")])
 x <- as.matrix(lung_dat[, c("age", "sex", "ph.ecog")])
 
-fit <- survgbm(
+fit <- fastgbm(
   x,
   time = lung_dat$time,
   status = lung_dat$status,
@@ -52,7 +58,7 @@ predict(fit, x[1:5, ], type = "survival", times = c(90, 180, 365))
 ## Formula interface
 
 ```{r}
-fit2 <- survgbm(Surv(time, status) ~ age + sex + ph.ecog, data = lung_dat, ntrees = 100L, verbose = FALSE)
+fit2 <- fastgbm(Surv(time, status) ~ age + sex + ph.ecog, data = lung_dat, ntrees = 100L, verbose = FALSE)
 ```
 
 ## Evaluation and importance

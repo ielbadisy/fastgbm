@@ -8,7 +8,7 @@ test_that("a single missing value does not break training or prediction", {
   time <- exp(x[, 1] + rnorm(n, sd = 0.1))
   status <- rep(1L, n)
   x[3, 1] <- NA
-  fit <- survgbm(x, time = time, status = status, objective = "cox", ntrees = 10L, verbose = FALSE)
+  fit <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 10L, verbose = FALSE)
   p <- predict(fit, x)
   expect_length(p, n)
   expect_true(all(is.finite(p)))
@@ -20,7 +20,7 @@ test_that("an entirely-missing feature is handled without error and is not used 
   x <- cbind(x1 = rnorm(n), x2 = rep(NA_real_, n))
   time <- exp(x[, 1] + rnorm(n, sd = 0.1))
   status <- rep(1L, n)
-  fit <- survgbm(x, time = time, status = status, objective = "cox", ntrees = 10L,
+  fit <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 10L,
                 min_node_size = 2L, verbose = FALSE)
   p <- predict(fit, x)
   expect_true(all(is.finite(p)))
@@ -40,7 +40,7 @@ test_that("missing values concentrated by outcome are routed to reduce loss, not
   # Missingness only occurs for the low-risk (long-survival) group: an informative pattern.
   x1_missing[x1 <= 0] <- NA
   x <- matrix(x1_missing, ncol = 1)
-  fit <- survgbm(x, time = time, status = status, objective = "cox", ntrees = 20L,
+  fit <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 20L,
                 learning_rate = 0.3, min_node_size = 5L, verbose = FALSE)
   risk <- predict(fit, x, type = "link")
   # Rows with missing x1 all belong to the low-risk group; predicted risk should be lower there.
@@ -53,7 +53,7 @@ test_that("missingness in newdata that was never observed in training is still h
   x_train <- matrix(rnorm(n * 2), ncol = 2)
   time_train <- exp(x_train[, 1] + rnorm(n, sd = 0.1))
   status_train <- rep(1L, n)
-  fit <- survgbm(x_train, time = time_train, status = status_train, objective = "cox",
+  fit <- fastgbm(x_train, time = time_train, status = status_train, objective = "cox",
                 ntrees = 10L, verbose = FALSE)
   x_new <- matrix(rnorm(10 * 2), ncol = 2)
   x_new[1, ] <- NA
@@ -68,7 +68,7 @@ test_that("all values missing for a row still produces a finite prediction", {
   x <- matrix(rnorm(n * 3), ncol = 3)
   time <- exp(x[, 1] + rnorm(n, sd = 0.1))
   status <- rep(1L, n)
-  fit <- survgbm(x, time = time, status = status, objective = "cox", ntrees = 10L, verbose = FALSE)
+  fit <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 10L, verbose = FALSE)
   x_new <- matrix(NA_real_, nrow = 1, ncol = 3)
   p <- predict(fit, x_new)
   expect_true(is.finite(p))

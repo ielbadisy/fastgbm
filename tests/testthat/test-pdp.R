@@ -5,10 +5,10 @@ test_that("pdp() recovers a monotonic signal on a strongly monotonic feature", {
   lp_true <- 2 * x[, 1] - 1 * x[, 2]
   time <- rexp(n, rate = exp(lp_true) * 0.2)
   status <- rep(1L, n)
-  fit <- survgbm(x, time = time, status = status, objective = "cox", ntrees = 150L,
+  fit <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 150L,
                 learning_rate = 0.1, max_depth = 3L, verbose = FALSE)
   p <- pdp(fit, "x1", data = as.data.frame(x), grid_resolution = 15L)
-  expect_s3_class(p, "survgbm_pdp")
+  expect_s3_class(p, "fastgbm_pdp")
   # Exponential-time Cox data is noisy at n=300, so a handful of grid steps can
   # locally dip; require the overall trend to be strongly monotonic instead of
   # every single step.
@@ -24,7 +24,7 @@ test_that("pdp() matches the `pdp` package's partial() for a matrix-fitted model
   lp_true <- 2 * x[, 1] - 1 * x[, 2]
   time <- rexp(n, rate = exp(lp_true) * 0.2)
   status <- rep(1L, n)
-  fit <- survgbm(x, time = time, status = status, objective = "cox", ntrees = 100L,
+  fit <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 100L,
                 learning_rate = 0.1, max_depth = 3L, verbose = FALSE)
   mine <- pdp(fit, "x1", data = as.data.frame(x), grid_resolution = 10L)
 
@@ -49,7 +49,7 @@ test_that("pdp() works on a formula-fitted model with a factor predictor", {
   lp_true <- 2 * dat$x1 + ifelse(dat$x3 == "b", 1, 0)
   dat$time <- rexp(n, rate = exp(lp_true) * 0.2)
   dat$status <- 1L
-  fit <- survgbm(survival::Surv(time, status) ~ x1 + x2 + x3, data = dat, objective = "cox",
+  fit <- fastgbm(survival::Surv(time, status) ~ x1 + x2 + x3, data = dat, objective = "cox",
                 ntrees = 100L, learning_rate = 0.1, max_depth = 3L, verbose = FALSE)
   p <- pdp(fit, "x1", data = dat, grid_resolution = 8L)
   expect_true(all(is.finite(p$yhat)))
@@ -60,7 +60,7 @@ test_that("pdp() defaults to the linear predictor", {
   skip_if_not_installed("survival")
   dat <- na.omit(as.data.frame(survival::lung[, c("time", "status", "age", "sex", "ph.ecog")]))
   x <- model.matrix(~ age + sex + ph.ecog - 1, dat)
-  fit <- survgbm(x, time = dat$time, status = dat$status, objective = "cox",
+  fit <- fastgbm(x, time = dat$time, status = dat$status, objective = "cox",
                 ntrees = 20L, learning_rate = 0.1, max_depth = 2L, min_node_size = 10L,
                 seed = 1L, verbose = FALSE)
   p <- pdp(fit, "age", data = as.data.frame(x), grid_resolution = 6L)
@@ -68,13 +68,13 @@ test_that("pdp() defaults to the linear predictor", {
   expect_true(all(is.finite(p$yhat)))
 })
 
-test_that("plot.survgbm_pdp() runs without error", {
+test_that("plot.fastgbm_pdp() runs without error", {
   set.seed(3)
   n <- 100
   x <- matrix(rnorm(n), ncol = 1, dimnames = list(NULL, "x1"))
   time <- exp(x[, 1] + rnorm(n, sd = 0.2))
   status <- rep(1L, n)
-  fit <- survgbm(x, time = time, status = status, objective = "cox", ntrees = 20L, verbose = FALSE)
+  fit <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 20L, verbose = FALSE)
   p <- pdp(fit, "x1", data = as.data.frame(x), grid_resolution = 5L)
   grDevices::pdf(NULL)
   on.exit(grDevices::dev.off(), add = TRUE)

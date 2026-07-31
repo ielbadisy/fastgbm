@@ -1,13 +1,12 @@
-Date: 2026-07-29 12:13:50.966178
+Date: 2026-07-31 15:10:46.690629
 R version: R version 4.5.1 (2025-06-13)
 OS: Linux 6.17.0-1030-oem
-Detected cores: 16
 fastgbm version: 0.1.0
 gbm version: 2.3.1
 xgboost version: 3.2.1.1
 ranger version: 0.18.0
-biostatlab version: 0.0.1
-Seed base: 20260729
+mlbench version: 2.1.6
+Seed base: 20260731
 ntrees: 200 max_depth: 5 learning_rate: 0.1 min_node_size: 10
 
 sessionInfo():
@@ -34,11 +33,11 @@ attached base packages:
 [1] stats     graphics  grDevices utils     datasets  methods   base     
 
 other attached packages:
-[1] ranger_0.18.0    xgboost_3.2.1.1  gbm_2.3.1        survival_3.8-6  
-[5] biostatlab_0.0.1 fastgbm_0.1.0   
+[1] ranger_0.18.0   xgboost_3.2.1.1 gbm_2.3.1       mlbench_2.1-6  
+[5] fastgbm_0.1.0  
 
 loaded via a namespace (and not attached):
- [1] compiler_4.5.1        Matrix_1.7-3          parallel_4.5.1       
- [4] tools_4.5.1           Rcpp_1.1.2            splines_4.5.1        
+ [1] compiler_4.5.1        Matrix_1.7-3          tools_4.5.1          
+ [4] survival_3.8-6        Rcpp_1.1.2            splines_4.5.1        
  [7] grid_4.5.1            data.table_1.18.4     jsonlite_2.0.0       
 [10] RcppParallel_5.1.11-2 lattice_0.22-5       

@@ -1,19 +1,19 @@
-#' Save a fitted survgbm model
+#' Save a fitted fastgbm model
 #'
-#' @param object A fitted `survgbm` object.
+#' @param object A fitted `fastgbm` object.
 #' @param path Path to write the serialized model to.
 #' @return `path`, invisibly.
 #' @export
-save_survgbm <- function(object, path) {
+save_fastgbm <- function(object, path) {
   saveRDS(object, path)
   invisible(path)
 }
 
-#' Load a serialized survgbm model
+#' Load a serialized fastgbm model
 #'
-#' @param path Path to a serialized model, as written by [save_survgbm()].
-#' @return A `survgbm` object.
+#' @param path Path to a serialized model, as written by [save_fastgbm()].
+#' @return A `fastgbm` object.
 #' @export
-load_survgbm <- function(path) {
+load_fastgbm <- function(path) {
   readRDS(path)
 }

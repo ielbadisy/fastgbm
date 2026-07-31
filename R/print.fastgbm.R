@@ -1,11 +1,11 @@
-#' Print a fitted survgbm model
+#' Print a fitted fastgbm model
 #'
-#' @param x A fitted `survgbm` object.
+#' @param x A fitted `fastgbm` object.
 #' @param ... Unused.
 #' @return `x`, invisibly.
 #' @export
-print.survgbm <- function(x, ...) {
-  cat("survgbm model\n")
+print.fastgbm <- function(x, ...) {
+  cat("fastgbm model\n")
   cat("  objective:", x$objective, "\n")
   cat("  trees:", x$ntrees, "\n")
   cat("  learning rate:", x$learning_rate, "\n")

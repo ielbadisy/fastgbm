@@ -1,91 +1,91 @@
 "dataset","task","model","n_reps","train_sec_median","train_sec_q25","train_sec_q75","predict_sec_median","predict_sec_q25","predict_sec_q75","metric_name","metric_median","metric_q25","metric_q75"
-"pbc","survival","survgbm_cox",10,0.00550000000000139,0.00425000000000075,0.00675000000000114,0,0,0.000750000000000917,"cindex",0.809157360330406,0.786833280946353,0.825076579813183
-"pbc","survival","survgbm_aft",10,0.00450000000000017,0.00400000000000134,0.00650000000000062,0,0,0,"cindex",0.798857691526392,0.793341889557636,0.821223383469274
-"pbc","survival","survgbm_pexp",10,0.0199999999999996,0.0142499999999997,0.0290000000000008,0.000999999999998558,0.000249999999999417,0.00100000000000122,"cindex",0.798632024701291,0.774844811707884,0.814214868372265
+"pbc","survival","fastgbm_cox",10,0.00550000000000139,0.00425000000000075,0.00675000000000114,0,0,0.000750000000000917,"cindex",0.809157360330406,0.786833280946353,0.825076579813183
+"pbc","survival","fastgbm_aft",10,0.00450000000000017,0.00400000000000134,0.00650000000000062,0,0,0,"cindex",0.798857691526392,0.793341889557636,0.821223383469274
+"pbc","survival","fastgbm_pexp",10,0.0199999999999996,0.0142499999999997,0.0290000000000008,0.000999999999998558,0.000249999999999417,0.00100000000000122,"cindex",0.798632024701291,0.774844811707884,0.814214868372265
 "pbc","survival","gbm",10,0.0279999999999991,0.027000000000001,0.0280000000000018,0.00100000000000078,0.000999999999999446,0.00174999999999947,"cindex",0.803664997851349,0.777994452375018,0.826271112605587
 "pbc","survival","xgboost",10,0.0485000000000007,0.0452499999999998,0.0519999999999996,0.00100000000000078,0.000999999999999446,0.00100000000000122,"cindex",0.818919132605091,0.801865401643612,0.830975735707384
 "pbc","survival","ranger",10,0.123,0.121250000000002,0.126249999999999,0.00850000000000062,0.00799999999999934,0.00900000000000034,"cindex",0.819684021227793,0.798165961791197,0.831592455959735
-"pbc","survival","survgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
-"pbc","survival","survgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
-"pbc","survival","survgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/7/1",NA,NA,NA
-"pbc","survival","survgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
-"pbc","survival","survgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
-"pbc","survival","survgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
-"pbc","survival","survgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=7/3/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
-"pbc","survival","survgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=9/1/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
-"pbc","survival","survgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
-"heart_failure","survival","survgbm_cox",10,0.00300000000000011,0.00300000000000011,0.00300000000000011,0,0,0,"cindex",0.705926838215745,0.686858683187633,0.716975954893186
-"heart_failure","survival","survgbm_aft",10,0.00300000000000011,0.00200000000000244,0.00399999999999778,0,0,0,"cindex",0.702050900686867,0.680112422843653,0.712307599040229
-"heart_failure","survival","survgbm_pexp",10,0.0235000000000021,0.0164999999999953,0.0357499999999984,0.0014999999999965,0.000999999999997669,0.00200000000000244,"cindex",0.691918173062588,0.664999110454216,0.713542241436809
+"pbc","survival","fastgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
+"pbc","survival","fastgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
+"pbc","survival","fastgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/7/1",NA,NA,NA
+"pbc","survival","fastgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
+"pbc","survival","fastgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
+"pbc","survival","fastgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
+"pbc","survival","fastgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=7/3/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
+"pbc","survival","fastgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=9/1/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
+"pbc","survival","fastgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
+"heart_failure","survival","fastgbm_cox",10,0.00300000000000011,0.00300000000000011,0.00300000000000011,0,0,0,"cindex",0.705926838215745,0.686858683187633,0.716975954893186
+"heart_failure","survival","fastgbm_aft",10,0.00300000000000011,0.00200000000000244,0.00399999999999778,0,0,0,"cindex",0.702050900686867,0.680112422843653,0.712307599040229
+"heart_failure","survival","fastgbm_pexp",10,0.0235000000000021,0.0164999999999953,0.0357499999999984,0.0014999999999965,0.000999999999997669,0.00200000000000244,"cindex",0.691918173062588,0.664999110454216,0.713542241436809
 "heart_failure","survival","gbm",10,0.0189999999999984,0.0189999999999984,0.0190000000000037,0.001000000000003,0.000999999999997669,0.00100000000000477,"cindex",0.680809797582592,0.667464360880738,0.6973356963081
 "heart_failure","survival","xgboost",10,0.0279999999999987,0.027000000000001,0.0290000000000017,0.000999999999997669,0.000999999999997669,0.00100000000000389,"cindex",0.682419169881007,0.665326809110916,0.690343453193659
 "heart_failure","survival","ranger",10,0.0720000000000027,0.0720000000000027,0.0729999999999986,0.007000000000005,0.00624999999999964,0.00775000000000325,"cindex",0.727964264991979,0.699843566595689,0.742121534100205
-"heart_failure","survival","survgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=7/3/0",NA,NA,NA
-"heart_failure","survival","survgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
-"heart_failure","survival","survgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
-"heart_failure","survival","survgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
-"heart_failure","survival","survgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
-"heart_failure","survival","survgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA
-"heart_failure","survival","survgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=3/7/0; cindex_win/loss/tie=7/3/0",NA,NA,NA
-"heart_failure","survival","survgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=6/3/1; cindex_win/loss/tie=7/3/0",NA,NA,NA
-"heart_failure","survival","survgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
-"breast","survival","survgbm_cox",10,0.00500000000000256,0.00499999999999545,0.00600000000000023,0,0,0,"cindex",0.662659243905999,0.64937552527829,0.6743201136903
-"breast","survival","survgbm_aft",10,0.00600000000000023,0.00425000000000431,0.00600000000000023,0,0,0.000999999999990564,"cindex",0.665615817195974,0.662656587797401,0.678175008155133
-"breast","survival","survgbm_pexp",10,0.079500000000003,0.0722500000000004,0.102750000000004,0.00400000000000489,0.00324999999999775,0.00474999999999781,"cindex",0.648078646899741,0.638931726395304,0.654719000150217
+"heart_failure","survival","fastgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=7/3/0",NA,NA,NA
+"heart_failure","survival","fastgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
+"heart_failure","survival","fastgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
+"heart_failure","survival","fastgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
+"heart_failure","survival","fastgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
+"heart_failure","survival","fastgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA
+"heart_failure","survival","fastgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=3/7/0; cindex_win/loss/tie=7/3/0",NA,NA,NA
+"heart_failure","survival","fastgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=6/3/1; cindex_win/loss/tie=7/3/0",NA,NA,NA
+"heart_failure","survival","fastgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
+"breast","survival","fastgbm_cox",10,0.00500000000000256,0.00499999999999545,0.00600000000000023,0,0,0,"cindex",0.662659243905999,0.64937552527829,0.6743201136903
+"breast","survival","fastgbm_aft",10,0.00600000000000023,0.00425000000000431,0.00600000000000023,0,0,0.000999999999990564,"cindex",0.665615817195974,0.662656587797401,0.678175008155133
+"breast","survival","fastgbm_pexp",10,0.079500000000003,0.0722500000000004,0.102750000000004,0.00400000000000489,0.00324999999999775,0.00474999999999781,"cindex",0.648078646899741,0.638931726395304,0.654719000150217
 "breast","survival","gbm",10,0.0305000000000035,0.0289999999999981,0.0389999999999979,0.00100000000000477,0.00099999999999234,0.0017499999999977,"cindex",0.647894055314565,0.636814554102534,0.658193475749507
 "breast","survival","xgboost",10,0.0380000000000038,0.0370000000000008,0.0480000000000018,0.00100000000000477,0.000999999999999446,0.00199999999999534,"cindex",0.648049366463187,0.636130107115565,0.660975662182494
 "breast","survival","ranger",10,0.222499999999997,0.219250000000006,0.311249999999998,0.0429999999999922,0.0382500000000068,0.0504999999999995,"cindex",0.697388204774608,0.67501709961678,0.711917060978259
-"breast","survival","survgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
-"breast","survival","survgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
-"breast","survival","survgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
-"breast","survival","survgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
-"breast","survival","survgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
-"breast","survival","survgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA
-"breast","survival","survgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=6/4/0",NA,NA,NA
-"breast","survival","survgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
-"breast","survival","survgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
-"colon_cancer","survival","survgbm_cox",10,0.0069999999999979,0.00500000000000966,0.00800000000000622,0,0,0.000999999999990564,"cindex",0.619827320157214,0.60538317161555,0.638815733382575
-"colon_cancer","survival","survgbm_aft",10,0.00600000000000023,0.00524999999999665,0.00700000000000145,0.000499999999995282,0,0.00100000000000477,"cindex",0.628294117019082,0.62392136015599,0.635742523424388
-"colon_cancer","survival","survgbm_pexp",10,0.155499999999996,0.146999999999998,0.181749999999994,0.00649999999999551,0.00600000000000023,0.00700000000000145,"cindex",0.628635159678841,0.602557372072534,0.63491493281827
+"breast","survival","fastgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
+"breast","survival","fastgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=9/1/0",NA,NA,NA
+"breast","survival","fastgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
+"breast","survival","fastgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
+"breast","survival","fastgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
+"breast","survival","fastgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA
+"breast","survival","fastgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=6/4/0",NA,NA,NA
+"breast","survival","fastgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
+"breast","survival","fastgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
+"colon_cancer","survival","fastgbm_cox",10,0.0069999999999979,0.00500000000000966,0.00800000000000622,0,0,0.000999999999990564,"cindex",0.619827320157214,0.60538317161555,0.638815733382575
+"colon_cancer","survival","fastgbm_aft",10,0.00600000000000023,0.00524999999999665,0.00700000000000145,0.000499999999995282,0,0.00100000000000477,"cindex",0.628294117019082,0.62392136015599,0.635742523424388
+"colon_cancer","survival","fastgbm_pexp",10,0.155499999999996,0.146999999999998,0.181749999999994,0.00649999999999551,0.00600000000000023,0.00700000000000145,"cindex",0.628635159678841,0.602557372072534,0.63491493281827
 "colon_cancer","survival","gbm",10,0.0470000000000113,0.0462500000000041,0.0592500000000022,0.00199999999999534,0.00199999999999534,0.00199999999999534,"cindex",0.64477932820582,0.629137241638672,0.647610584834771
 "colon_cancer","survival","xgboost",10,0.035499999999999,0.0267499999999998,0.0380000000000074,0.00100000000000477,0.000999999999990564,0.00199999999999534,"cindex",0.60926500133813,0.602325856988096,0.622321754351401
 "colon_cancer","survival","ranger",10,0.19250000000001,0.190000000000001,0.249250000000007,0.0790000000000006,0.0715000000000003,0.0872499999999974,"cindex",0.655287234013432,0.64210434675505,0.674246883691098
-"colon_cancer","survival","survgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
-"colon_cancer","survival","survgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=7/3/0",NA,NA,NA
-"colon_cancer","survival","survgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
-"colon_cancer","survival","survgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
-"colon_cancer","survival","survgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
-"colon_cancer","survival","survgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
-"colon_cancer","survival","survgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
-"colon_cancer","survival","survgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=7/3/0",NA,NA,NA
-"colon_cancer","survival","survgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=8/2/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
-"crc_mondaca2020","survival","survgbm_cox",10,0.00450000000000017,0.00299999999998946,0.00575000000000614,0.000500000000002387,0,0.00100000000000477,"cindex",0.57584319213366,0.545797923961359,0.586674578584564
-"crc_mondaca2020","survival","survgbm_aft",10,0.00400000000000489,0.00325000000000841,0.00475000000000136,0,0,0,"cindex",0.558964814869014,0.550498042452716,0.57028582399899
-"crc_mondaca2020","survival","survgbm_pexp",10,0.0655000000000001,0.0579999999999998,0.0779999999999994,0.00300000000001432,0.00299999999999301,0.00399999999999068,"cindex",0.530934198050003,0.514142930890546,0.549926267664372
+"colon_cancer","survival","fastgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
+"colon_cancer","survival","fastgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=7/3/0",NA,NA,NA
+"colon_cancer","survival","fastgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
+"colon_cancer","survival","fastgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
+"colon_cancer","survival","fastgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
+"colon_cancer","survival","fastgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
+"colon_cancer","survival","fastgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
+"colon_cancer","survival","fastgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=7/3/0",NA,NA,NA
+"colon_cancer","survival","fastgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=8/2/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
+"crc_mondaca2020","survival","fastgbm_cox",10,0.00450000000000017,0.00299999999998946,0.00575000000000614,0.000500000000002387,0,0.00100000000000477,"cindex",0.57584319213366,0.545797923961359,0.586674578584564
+"crc_mondaca2020","survival","fastgbm_aft",10,0.00400000000000489,0.00325000000000841,0.00475000000000136,0,0,0,"cindex",0.558964814869014,0.550498042452716,0.57028582399899
+"crc_mondaca2020","survival","fastgbm_pexp",10,0.0655000000000001,0.0579999999999998,0.0779999999999994,0.00300000000001432,0.00299999999999301,0.00399999999999068,"cindex",0.530934198050003,0.514142930890546,0.549926267664372
 "crc_mondaca2020","survival","gbm",10,0.0379999999999825,0.0372500000000002,0.0394999999999968,0.00100000000000477,0.00100000000000477,0.00199999999999534,"cindex",0.558048138886736,0.538117838658592,0.567382409706448
 "crc_mondaca2020","survival","xgboost",10,0.0420000000000016,0.0420000000000016,0.056750000000001,0.00100000000000477,0.00100000000000477,0.00174999999998704,"cindex",0.552523315442468,0.544875677995311,0.578062404934149
 "crc_mondaca2020","survival","ranger",10,0.147500000000022,0.146249999999995,0.191000000000003,0.0264999999999915,0.0242500000000021,0.0302500000000023,"cindex",0.612105045301936,0.588095489467848,0.618674022203236
-"crc_mondaca2020","survival","survgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=8/2/0",NA,NA,NA
-"crc_mondaca2020","survival","survgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
-"crc_mondaca2020","survival","survgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA
-"crc_mondaca2020","survival","survgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=6/4/0",NA,NA,NA
-"crc_mondaca2020","survival","survgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
-"crc_mondaca2020","survival","survgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
-"crc_mondaca2020","survival","survgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=3/7/0",NA,NA,NA
-"crc_mondaca2020","survival","survgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=2/8/0; cindex_win/loss/tie=3/7/0",NA,NA,NA
-"crc_mondaca2020","survival","survgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
-"framingham","survival","survgbm_cox",10,0.0534999999999997,0.041249999999998,0.0579999999999927,0.00200000000000955,0.00199999999998113,0.00200000000000955,"cindex",0.756909213353058,0.751027487418444,0.761326669192145
-"framingham","survival","survgbm_aft",10,0.0439999999999969,0.0379999999999896,0.0550000000000068,0.00200000000000955,0.00199999999998113,0.00200000000000955,"cindex",0.751954013233163,0.749450604364025,0.758822007692883
-"framingham","survival","survgbm_pexp",10,0.441499999999991,0.35125,0.533000000000008,0.0190000000000055,0.0155000000000101,0.0232499999999973,"cindex",0.750736865854622,0.748006879304474,0.75397713631312
+"crc_mondaca2020","survival","fastgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=8/2/0",NA,NA,NA
+"crc_mondaca2020","survival","fastgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
+"crc_mondaca2020","survival","fastgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA
+"crc_mondaca2020","survival","fastgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=6/4/0",NA,NA,NA
+"crc_mondaca2020","survival","fastgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=5/5/0",NA,NA,NA
+"crc_mondaca2020","survival","fastgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=1/9/0",NA,NA,NA
+"crc_mondaca2020","survival","fastgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=3/7/0",NA,NA,NA
+"crc_mondaca2020","survival","fastgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=2/8/0; cindex_win/loss/tie=3/7/0",NA,NA,NA
+"crc_mondaca2020","survival","fastgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
+"framingham","survival","fastgbm_cox",10,0.0534999999999997,0.041249999999998,0.0579999999999927,0.00200000000000955,0.00199999999998113,0.00200000000000955,"cindex",0.756909213353058,0.751027487418444,0.761326669192145
+"framingham","survival","fastgbm_aft",10,0.0439999999999969,0.0379999999999896,0.0550000000000068,0.00200000000000955,0.00199999999998113,0.00200000000000955,"cindex",0.751954013233163,0.749450604364025,0.758822007692883
+"framingham","survival","fastgbm_pexp",10,0.441499999999991,0.35125,0.533000000000008,0.0190000000000055,0.0155000000000101,0.0232499999999973,"cindex",0.750736865854622,0.748006879304474,0.75397713631312
 "framingham","survival","gbm",10,0.266999999999996,0.239249999999998,0.342500000000015,0.00500000000000966,0.00499999999999545,0.00800000000000978,"cindex",0.759421538519947,0.756560099909986,0.761910227243902
 "framingham","survival","xgboost",10,0.0799999999999983,0.0742500000000135,0.108750000000015,0.00300000000000011,0.0029999999999859,0.0040000000000191,"cindex",0.746914233449911,0.741682927311166,0.749079476429391
 "framingham","survival","ranger",10,2.39550000000001,2.03849999999998,2.51724999999999,0.028499999999994,0.0262500000000117,0.0360000000000014,"cindex",0.755932471538079,0.753189539223121,0.761152272718138
-"framingham","survival","survgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
-"framingham","survival","survgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=9/1/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
-"framingham","survival","survgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
-"framingham","survival","survgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
-"framingham","survival","survgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=9/1/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
-"framingham","survival","survgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA
-"framingham","survival","survgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
-"framingham","survival","survgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
-"framingham","survival","survgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA
+"framingham","survival","fastgbm_cox_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
+"framingham","survival","fastgbm_cox_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=9/1/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
+"framingham","survival","fastgbm_cox_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=4/6/0",NA,NA,NA
+"framingham","survival","fastgbm_aft_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
+"framingham","survival","fastgbm_aft_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=9/1/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
+"framingham","survival","fastgbm_aft_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA
+"framingham","survival","fastgbm_pexp_vs_gbm",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=0/10/0",NA,NA,NA
+"framingham","survival","fastgbm_pexp_vs_xgboost",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=0/10/0; cindex_win/loss/tie=10/0/0",NA,NA,NA
+"framingham","survival","fastgbm_pexp_vs_ranger",10,NA,NA,NA,NA,NA,NA,"speed_win/loss/tie=10/0/0; cindex_win/loss/tie=2/8/0",NA,NA,NA

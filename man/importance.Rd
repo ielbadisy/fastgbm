@@ -7,7 +7,7 @@
 importance(object, ...)
 }
 \arguments{
-\item{object}{A fitted `survgbm` object.}
+\item{object}{A fitted `fastgbm` object.}
 
 \item{...}{Unused.}
 }
