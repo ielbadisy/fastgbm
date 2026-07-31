@@ -37,7 +37,7 @@ LR <- 0.1
 MIN_NODE <- 10L
 
 N_GRID <- c(1000L, 5000L, 20000L)
-P_GRID <- c(10L, 50L, 100L)  # includes the 10 Friedman1 columns; extra columns are pure noise
+P_GRID <- c(10L, 50L, 100L, 1000L)  # includes the 10 Friedman1 columns; extra columns are pure noise
 N_CORES <- max(1L, parallel::detectCores(logical = TRUE))
 THREADS_GRID <- unique(c(1L, 2L, 4L, N_CORES))
 

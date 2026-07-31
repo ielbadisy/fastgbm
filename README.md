@@ -284,39 +284,46 @@ trees are independent), while `fastgbm`'s boosting is sequential across
 trees and only parallelizes *within* a tree's split search -- so how the two
 compare depends on data shape and thread count, not just one point.
 `inst/benchmarks/run-benchmark-scaling.R` sweeps `n` in `{1000, 5000, 20000}`
-and `p` in `{10, 50, 100}` (Friedman1's 10 columns plus pure-noise columns
-to reach the target `p`), single-threaded, 100 trees, matched
+and `p` in `{10, 50, 100, 1000}` (Friedman1's 10 columns plus pure-noise
+columns to reach the target `p`), single-threaded, 100 trees, matched
 hyperparameters:
 
 ![fastgbm vs ranger training time across n and p, log-log axes, single-threaded](inst/benchmarks/scaling-benchmark-np.png)
 
 Two clear patterns: **fastgbm's relative speed improves as `n` grows**
-(fastgbm/ranger training-time ratio goes from 1.30x at `n=1000, p=10` to
-0.57x at `n=20000, p=10` -- crossing over from slower to faster), but
-**degrades as `p` grows** (1.30x -> 3.01x -> 4.41x at `n=1000` as `p` goes
-10 -> 50 -> 100). The `p` effect traces to a real, fixable cause, not an
-engine inefficiency: `fastgbm`'s default `colsample = 0.8` searches ~80% of
-features at every split regardless of `p`, while `ranger`'s default `mtry`
-for regression is `p/3` -- at `p = 100` that is 80 features searched per
-split vs. 33. Setting `fastgbm`'s `colsample` to match (`1/3` here) confirms
-it: at `n = 5000, p = 100`, training time drops from 0.98s (`colsample =
-0.8`) to 0.50s (`colsample = 1/3`), turning a loss to `ranger` (0.57s) into
-a win. The trade-off is real too -- `colsample = 0.8` was the package's own
-tuned default for a reason (see `?fastgbm`: it gave a small but consistently
-non-negative C-index gain on the survival benchmark datasets), so this is a
-speed/accuracy dial, not a free lunch.
+(fastgbm/ranger training-time ratio goes from 1.20x at `n=1000, p=10` to
+0.52x at `n=20000, p=10` -- crossing over from slower to faster), but
+**degrades as `p` grows** (1.20x -> 3.15x -> 4.45x -> 12.04x at `n=1000` as
+`p` goes 10 -> 50 -> 100 -> 1000). The `p` effect traces to a real, fixable
+cause, not an engine inefficiency: `fastgbm`'s default `colsample = 0.8`
+searches ~80% of features at every split regardless of `p`, while `ranger`'s
+default `mtry` for regression is `p/3` -- at `p = 1000` that is 800 features
+searched per split vs. 333. Setting `fastgbm`'s `colsample` to match (`1/3`
+here) confirms it: at `n = 5000, p = 100`, training time drops from 0.98s
+(`colsample = 0.8`) to 0.50s (`colsample = 1/3`), turning a loss to `ranger`
+(0.57s) into a win. The trade-off is real too -- `colsample = 0.8` was the
+package's own tuned default for a reason (see `?fastgbm`: it gave a small
+but consistently non-negative C-index gain on the survival benchmark
+datasets), so this is a speed/accuracy dial, not a free lunch. Note that
+`n` growing does not always rescue `fastgbm` from a high-`p` disadvantage
+the way it does at `p <= 100`: at `p = 1000`, `fastgbm` is still ~2.8x
+slower than `ranger` even at the largest `n` tested (`n = 20000`), the one
+`p` in this grid where growing `n` alone was not enough to close the gap --
+`colsample` tuning matters most exactly here.
 
 The thread sweep (`inst/benchmarks/run-benchmark-scaling.R`, at the largest
-grid point, `n = 20000, p = 100`, on a 16-core machine) shows real but
+grid point, `n = 20000, p = 1000`, on a 16-core machine) shows real but
 sub-linear speedup, as expected for within-tree (not across-tree)
-parallelism:
+parallelism -- and *better* scaling than the smaller `p = 100` grid point
+used in earlier versions of this section, since a wider `colsample`-sampled
+feature set gives the level-wise split search more to parallelize per level:
 
-![fastgbm multi-threaded speedup vs thread count, n=20000 p=100](inst/benchmarks/scaling-benchmark-threads.png)
+![fastgbm multi-threaded speedup vs thread count, n=20000 p=1000](inst/benchmarks/scaling-benchmark-threads.png)
 
-1.6x at 2 threads, 2.3x at 4 threads, 3.0x at 16 threads (with the level-wise
-tree-growth engine described further below; an earlier per-node-parallel
-version reached only ~2.3x at 16 threads) -- real, and improved, but still
-nowhere near the dashed ideal-linear line, and not worth reaching for on
+1.8x at 2 threads, 3.5x at 4 threads, 5.8x at 16 threads (with the level-wise
+tree-growth engine described further below; the same sweep at `p = 100`
+reached only ~3.0x at 16 threads) -- real, and clearly improved at high `p`,
+but still nowhere near the dashed ideal-linear line, and not worth reaching for on
 small data (`threads = 1L` already skips `parallelFor()`'s dispatch overhead
 entirely; see "Split-search optimizations" above).
 

@@ -1,5 +1,19 @@
 # fastgbm 0.1.0 (unreleased)
 
+## Scaling benchmark extended to p = 1000
+
+* `inst/benchmarks/run-benchmark-scaling.R`'s `P_GRID` now includes `1000`
+  (was `{10, 50, 100}`). Confirms and sharpens the earlier `colsample`
+  finding: at `n = 1000`, the fastgbm/ranger training-time ratio reaches
+  12.04x (slower) at `p = 1000`, vs. 4.45x at `p = 100`. Unlike lower `p`,
+  growing `n` does not rescue `fastgbm` at `p = 1000` within the tested
+  range -- it is still ~2.8x slower than `ranger` even at `n = 20000`
+  (`colsample` tuning matters most exactly in this regime). The
+  thread-count sweep, now run at the new largest grid point (`n = 20000,
+  p = 1000`), shows *better* multi-threaded speedup than at `p = 100`
+  (5.8x vs. 3.0x at 16 threads) since a wider `colsample`-sampled feature
+  set gives the level-wise split search more to parallelize per level.
+
 ## Multi-threaded scaling: level-wise (breadth-first) tree growth
 
 * Added `inst/benchmarks/run-benchmark-multithreaded.R`: a direct head-to-head
