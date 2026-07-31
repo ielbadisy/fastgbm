@@ -260,6 +260,78 @@ the full existing test suite including the thread-count-determinism and
 finite-difference gradient/Hessian checks) -- they change only how fast the
 same computation runs, not what it computes.
 
+### Scaling behavior vs. n, p, and threads
+
+The single `n = 2000`/`p = 10` snapshot above is not the whole story: `ranger`
+parallelizes *across* trees (embarrassingly parallel, since random-forest
+trees are independent), while `fastgbm`'s boosting is sequential across
+trees and only parallelizes *within* a tree's split search -- so how the two
+compare depends on data shape and thread count, not just one point.
+`inst/benchmarks/run-benchmark-scaling.R` sweeps `n` in `{1000, 5000, 20000}`
+and `p` in `{10, 50, 100}` (Friedman1's 10 columns plus pure-noise columns
+to reach the target `p`), single-threaded, 100 trees, matched
+hyperparameters:
+
+![fastgbm vs ranger training time across n and p, log-log axes, single-threaded](inst/benchmarks/scaling-benchmark-np.png)
+
+Two clear patterns: **fastgbm's relative speed improves as `n` grows**
+(fastgbm/ranger training-time ratio goes from 1.30x at `n=1000, p=10` to
+0.57x at `n=20000, p=10` -- crossing over from slower to faster), but
+**degrades as `p` grows** (1.30x -> 3.01x -> 4.41x at `n=1000` as `p` goes
+10 -> 50 -> 100). The `p` effect traces to a real, fixable cause, not an
+engine inefficiency: `fastgbm`'s default `colsample = 0.8` searches ~80% of
+features at every split regardless of `p`, while `ranger`'s default `mtry`
+for regression is `p/3` -- at `p = 100` that is 80 features searched per
+split vs. 33. Setting `fastgbm`'s `colsample` to match (`1/3` here) confirms
+it: at `n = 5000, p = 100`, training time drops from 0.98s (`colsample =
+0.8`) to 0.50s (`colsample = 1/3`), turning a loss to `ranger` (0.57s) into
+a win. The trade-off is real too -- `colsample = 0.8` was the package's own
+tuned default for a reason (see `?fastgbm`: it gave a small but consistently
+non-negative C-index gain on the survival benchmark datasets), so this is a
+speed/accuracy dial, not a free lunch.
+
+The thread sweep (`inst/benchmarks/run-benchmark-scaling.R`, at the largest
+grid point, `n = 20000, p = 100`, on a 16-core machine) shows real but
+sub-linear speedup, as expected for within-tree (not across-tree)
+parallelism:
+
+![fastgbm multi-threaded speedup vs thread count, n=20000 p=100](inst/benchmarks/scaling-benchmark-threads.png)
+
+1.4x at 2 threads, 1.8x at 4 threads, 2.3x at 16 threads -- real, but nowhere
+near the dashed ideal-linear line, and not worth reaching for on small data
+(`threads = 1L` already skips `parallelFor()`'s dispatch overhead entirely;
+see "Split-search optimizations" above).
+
+**Tuning tips for runtime, in rough order of expected impact:**
+
+1. **High `p`: lower `colsample`.** The single biggest lever found here.
+   Try something in `ranger`'s ballpark (`~1/3`, or `sqrt(p)/p` for very
+   wide data) and check whether the accuracy cost is acceptable for your
+   dataset -- it was small-to-neutral on every survival benchmark dataset
+   tested so far, but that is not a guarantee for every dataset.
+2. **Large `n` and/or `p`: set `threads` explicitly (or leave the `0L`
+   default for "automatic").** Parallelism only pays for itself once nodes
+   are big enough to cross the internal `parallelFor()` threshold (>= 256
+   rows, >= 8 sampled features) -- exactly the large-data regime. Don't
+   bother tuning this for small data; there is nothing to parallelize.
+3. **Small `n`: don't expect threading or `colsample` to matter much.**
+   At `n = 1000`, fixed per-tree overhead (R/C++ call marshaling, tree-object
+   allocation) is a larger share of total time, so the sweep above shows
+   `fastgbm` closest to (or behind) `ranger` exactly in this regime,
+   regardless of these settings.
+4. **Row subsampling (`subsample < 1`) reduces the rows scanned in every
+   split search roughly linearly** -- an orthogonal lever to `colsample`,
+   stackable with it, at a similar speed/accuracy trade-off (the package
+   default is `0.8`, already below `1`).
+5. **Shallower/larger-leaf trees cut total node count, which is what all of
+   the above scales with.** `max_depth` and `min_node_size` trade tree
+   count for training time roughly like `colsample` trades feature count
+   for it, just via a different axis (fewer nodes visited vs. less searched
+   per node).
+
+See `inst/benchmarks/scaling-benchmark-np.csv`/`scaling-benchmark-threads.csv`
+for the full numbers behind both plots.
+
 **PDP shape recovery**: since the true partial dependence of each feature is
 computable in closed form for this DGP (fixing `x_j` on a grid and averaging
 the true mean function over the observed rows), `pdp()` on the fitted

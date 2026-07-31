@@ -1,5 +1,25 @@
 # fastgbm 0.1.0 (unreleased)
 
+## Scaling benchmark: n x p x threads, plus tuning tips
+
+* Added `inst/benchmarks/run-benchmark-scaling.R`: sweeps `n` in
+  `{1000, 5000, 20000}` and `p` in `{10, 50, 100}` (Friedman1 plus
+  pure-noise columns) comparing `fastgbm` vs. `ranger` training time,
+  single-threaded, plus a thread-count sweep (1/2/4/all-cores) at the
+  largest grid point.
+* Finding: `fastgbm`'s relative speed vs. `ranger` improves as `n` grows
+  (1.30x slower at `n=1000, p=10` to 0.57x, i.e. faster, at `n=20000,
+  p=10`) but degrades as `p` grows (1.30x -> 4.41x slower at `n=1000` as
+  `p` goes 10 -> 100). Root cause identified, not just observed: `fastgbm`'s
+  default `colsample = 0.8` searches far more features per split than
+  `ranger`'s default `mtry` (`p/3` for regression) once `p` is large;
+  matching it (`colsample = 1/3`) turns a loss into a win at `n=5000,
+  p=100` (0.98s -> 0.50s, vs. `ranger`'s 0.57s). Multi-threading gives
+  real but sub-linear speedup (1.8x at 4 threads, 2.3x at 16, on a 16-core
+  machine), as expected for within-tree (not across-tree) parallelism.
+* See README's "Scaling behavior vs. n, p, and threads" section for the
+  full analysis and resulting tuning-tip list.
+
 ## Split-search performance: two fixed costs removed from `src/fastgbm.cpp`
 
 * The per-(node, feature) histogram accumulation in `SplitFinder` made two
