@@ -101,44 +101,73 @@ struct SplitFinder : public Worker {
   const RVector<double> hess;
   const std::vector<int>& node_rows;
   const std::vector<int>& feature_ids;
+  const std::vector<int>& max_bin_by_feature;
   double G, H, lambda, gamma, min_child_weight;
   std::vector<NodeSplit>& results;
 
   SplitFinder(const IntegerMatrix& bins_, const NumericVector& grad_, const NumericVector& hess_,
              const std::vector<int>& node_rows_, const std::vector<int>& feature_ids_,
+             const std::vector<int>& max_bin_by_feature_,
              double G_, double H_, double lambda_, double gamma_, double min_child_weight_,
              std::vector<NodeSplit>& results_)
     : bins(bins_), grad(grad_), hess(hess_), node_rows(node_rows_), feature_ids(feature_ids_),
+      max_bin_by_feature(max_bin_by_feature_),
       G(G_), H(H_), lambda(lambda_), gamma(gamma_), min_child_weight(min_child_weight_),
       results(results_) {}
 
   void operator()(std::size_t begin, std::size_t end) {
+    // Reused across every (node, feature) call on this thread instead of a fresh
+    // heap allocation each time -- `parallelFor` gives each worker thread disjoint
+    // index ranges (never called concurrently on the same thread), so a
+    // `thread_local` buffer is race-free while eliminating what was, for small/
+    // moderate datasets, the dominant fixed cost of the split search (allocating
+    // and freeing two ~256-double vectors per feature per node, over thousands of
+    // node visits across a boosting run).
+    thread_local std::vector<double> gsum_buf;
+    thread_local std::vector<double> hsum_buf;
+
     for (std::size_t idx = begin; idx < end; ++idx) {
       int feature = feature_ids[idx];
-      int max_bin = 0;
-      for (int r : node_rows) {
-        int b = bins(r, feature);
-        if (b > max_bin) max_bin = b;
-      }
+      // Bin index range for this feature is already known globally (computed once
+      // in fastgbm_fit_cpp), so the buffer can be sized without a separate pass
+      // over `node_rows` first -- accumulation and the tightest-possible
+      // split-loop bound (`actual_max_bin`, the highest bin index actually present
+      // among these rows) are both obtained from a *single* pass below, instead of
+      // a two-pass version (one pass just to find the node-local max bin, a second
+      // to accumulate).
+      int alloc_bin = max_bin_by_feature[feature];
       NodeSplit local;
-      if (max_bin < 2) {
+      if (alloc_bin < 2) {
         results[idx] = local;
         continue;
       }
 
-      std::vector<double> gsum(max_bin + 1, 0.0), hsum(max_bin + 1, 0.0);
+      if (static_cast<int>(gsum_buf.size()) < alloc_bin + 1) {
+        gsum_buf.resize(alloc_bin + 1);
+        hsum_buf.resize(alloc_bin + 1);
+      }
+      std::fill(gsum_buf.begin(), gsum_buf.begin() + alloc_bin + 1, 0.0);
+      std::fill(hsum_buf.begin(), hsum_buf.begin() + alloc_bin + 1, 0.0);
+      std::vector<double>& gsum = gsum_buf;
+      std::vector<double>& hsum = hsum_buf;
+      int actual_max_bin = 0;
       for (int r : node_rows) {
         int b = bins(r, feature);
         if (b < 0) b = 0;
-        if (b > max_bin) b = max_bin;
+        if (b > alloc_bin) b = alloc_bin;
         gsum[b] += grad[r];
         hsum[b] += hess[r];
+        if (b > actual_max_bin) actual_max_bin = b;
+      }
+      if (actual_max_bin < 2) {
+        results[idx] = local;
+        continue;
       }
 
       double missing_g = gsum[0];
       double missing_h = hsum[0];
       double left_g = 0.0, left_h = 0.0;
-      for (int t = 1; t < max_bin; ++t) {
+      for (int t = 1; t < actual_max_bin; ++t) {
         left_g += gsum[t];
         left_h += hsum[t];
         double right_g = G - left_g - missing_g;
@@ -187,7 +216,7 @@ static TreeModel build_tree(const IntegerMatrix& bins, const NumericVector& grad
                             double gamma, double min_child_weight,
                             int p, double colsample, std::mt19937& rng,
                             std::vector<double>& importance,
-                            int num_threads) {
+                            int num_threads, const std::vector<int>& max_bin_by_feature) {
   TreeModel tree;
   tree.nodes.reserve(2 * rows.size() + 1);
   std::uniform_real_distribution<double> ur(0.0, 1.0);
@@ -218,10 +247,17 @@ static TreeModel build_tree(const IntegerMatrix& bins, const NumericVector& grad
     }
 
     std::vector<NodeSplit> results(feature_ids.size());
-    SplitFinder worker(bins, grad, hess, node_rows, feature_ids, G, H, lambda, gamma, min_child_weight, results);
-    // Parallel dispatch overhead is not worth it for small nodes/feature counts;
-    // below the threshold, call the worker directly (serial) for identical results.
-    if (feature_ids.size() >= 8 && node_rows.size() >= 256) {
+    SplitFinder worker(bins, grad, hess, node_rows, feature_ids, max_bin_by_feature, G, H, lambda, gamma, min_child_weight, results);
+    // Parallel dispatch overhead is not worth it for small nodes/feature counts,
+    // *or* when only one thread was requested (`threads = 1L`) -- RcppParallel's
+    // parallelFor() still pays its scheduling/dispatch cost even with a single
+    // worker thread, so an explicit single-thread request always takes the direct
+    // call, regardless of node/feature size. This matters in practice: it is the
+    // single-threaded regime every "fair comparison" benchmark against
+    // single-threaded competitors (ranger, gbm, xgboost with nthread=1) uses, and
+    // that dispatch overhead was paid at every sufficiently-large node across
+    // every tree in the run.
+    if (num_threads != 1 && feature_ids.size() >= 8 && node_rows.size() >= 256) {
       parallelFor(0, feature_ids.size(), worker, /*grainSize=*/1, num_threads);
     } else {
       worker(0, feature_ids.size());
@@ -695,7 +731,7 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
       for (int i = 0; i < n; ++i) rows.push_back(i);
     }
 
-    TreeModel tree = build_tree(bins, grad, hess, rows, max_depth, min_node_size, lambda, gamma, min_child_weight, p, colsample, rng, importance, num_threads);
+    TreeModel tree = build_tree(bins, grad, hess, rows, max_depth, min_node_size, lambda, gamma, min_child_weight, p, colsample, rng, importance, num_threads, max_bin_by_feature);
     for (int i = 0; i < n; ++i) {
       pred[i] += learning_rate * predict_tree_row(tree, bins, i);
     }

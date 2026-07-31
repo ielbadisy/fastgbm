@@ -1,5 +1,38 @@
 # fastgbm 0.1.0 (unreleased)
 
+## Split-search performance: two fixed costs removed from `src/fastgbm.cpp`
+
+* The per-(node, feature) histogram accumulation in `SplitFinder` made two
+  full passes over the node's rows - one only to find the highest occupied
+  bin, a second to accumulate gradient/hessian sums into an array sized to
+  that bin. Since each feature's bin range is already known globally from
+  the initial binning pass (`max_bin_by_feature`, computed once in
+  `fastgbm_fit_cpp`), the histogram buffer is now sized up front and a
+  single pass both accumulates the sums and finds the tightest split-loop
+  bound (the highest bin actually present among these specific rows).
+* Removed the per-call heap allocation of the two histogram buffers by
+  reusing `thread_local` buffers across every (node, feature) call on a
+  given thread instead - safe because `parallelFor()` gives each worker
+  thread disjoint index ranges, never concurrent access to the same thread's
+  buffer.
+* `RcppParallel::parallelFor()` was dispatched for large-enough nodes even
+  when `threads = 1L` was explicitly requested, paying real thread-pool
+  scheduling overhead for work that only ever ran on one thread. A single
+  explicit thread request now always takes the direct serial call,
+  regardless of node/feature size.
+* Net effect on the Friedman1 regression benchmark (`n = 2000`, `p = 10`,
+  200 trees, single-threaded, `bench::mark()` median): `fastgbm` training
+  time dropped from ~159ms to ~147ms, closing what was previously a clear
+  gap to `ranger` (~143-145ms) to a statistical tie (win/loss/tie 5/5 across
+  10 repeated splits in `inst/benchmarks/run-benchmark-regression.R`, and
+  `fastgbm`'s own median training time is marginally faster than `ranger`'s:
+  0.1005s vs. 0.1015s). See README's "Split-search optimizations" section
+  and `inst/benchmarks/regression-exectime-bench.png`/`.csv`.
+* All changes are behavior-preserving - identical split decisions, verified
+  by the full existing test suite including the thread-count-determinism
+  and finite-difference gradient/Hessian checks (`test-parallel.R`,
+  `test-gradients.R`).
+
 ## Regression and binary classification objectives added back (`objective = "regression"` / `"binary"`)
 
 * `fastgbm()` now covers three task types, not just survival: `objective =

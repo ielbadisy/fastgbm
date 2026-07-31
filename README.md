@@ -204,32 +204,61 @@ medians across repeats):
 
 | model | train time | RMSE |
 | --- | --- | --- |
-| fastgbm | 0.107s | 1.388 |
-| gbm | 0.143s | 1.281 |
-| xgboost | 0.194s | 1.388 |
-| ranger | 0.103s | 2.594 |
+| fastgbm | 0.101s | 1.388 |
+| gbm | 0.146s | 1.281 |
+| xgboost | 0.197s | 1.388 |
+| ranger | 0.102s | 2.594 |
 
-`fastgbm` trains 1.3-1.8x faster than `gbm`/`xgboost` (win/loss/tie 10/0/0 vs.
-each, paired across repeats) and is roughly `ranger`-speed (win/loss/tie
-4/6/0), while clearly beating `ranger` on RMSE (10/0/0) and matching
-`xgboost` (6/4/0); `gbm` edges out `fastgbm` on RMSE here (0/10/0). Consistent
-with the survival benchmark: `fastgbm` is not a universal-accuracy win, but
-it is never far off and is consistently among the fastest.
+`fastgbm` trains ~1.4-2.0x faster than `gbm`/`xgboost` (win/loss/tie 10/0/0
+vs. each, paired across repeats) and is now essentially tied with `ranger`
+on median training time (win/loss/tie 5/5/0, and `fastgbm`'s own median is
+marginally faster: 0.1005s vs. 0.1015s), while clearly beating `ranger` on
+RMSE (10/0/0) and matching `xgboost` (6/4/0); `gbm` edges out `fastgbm` on
+RMSE here (0/10/0). Consistent with the survival benchmark: `fastgbm` is not
+a universal-accuracy win, but it is never far off and is now among the
+fastest, not just close to it -- see "Split-search optimizations" below for
+what closed the gap to `ranger`.
 
 For a closer look at the *distribution* of training time, not just the
-median, `inst/benchmarks/run-benchmark-exectime.R` times all four models on
-one fixed 2,000-row Friedman1 draw with
-[`bench::mark()`](https://bench.r-lib.org/) (`benchr`, originally used for
-this, was archived off CRAN in November 2025; `bench` is the actively
-maintained equivalent), which reruns each model until it has collected at
-least 10 timings:
+median, `inst/benchmarks/run-benchmark-exectime.R` times all four models
+(explicitly checked to grow the same `ntrees = 200` each, so the comparison
+is purely about training-algorithm speed) on one fixed 2,000-row Friedman1
+draw with [`bench::mark()`](https://bench.r-lib.org/) (`benchr`, originally
+used for this, was archived off CRAN in November 2025; `bench` is the
+actively maintained equivalent), which reruns each model until it has
+collected at least 10 timings:
 
 ![bench::mark() training-time distribution for fastgbm, gbm, xgboost, and ranger on Friedman1](inst/benchmarks/regression-exectime-bench.png)
 
-`fastgbm` and `ranger` cluster tightly around 145-165ms with no overlap into
-`gbm`/`xgboost`'s 200-210ms band, matching the median-based table above.
-See `inst/benchmarks/regression-exectime-bench.csv` for the full
-`bench::mark()` summary (min/median/`itr/sec`/memory allocation).
+`fastgbm` and `ranger` overlap almost entirely around 141-150ms, both
+clearly separated from `gbm`/`xgboost`'s 199-234ms band. See
+`inst/benchmarks/regression-exectime-bench.csv` for the full `bench::mark()`
+summary (min/median/`itr/sec`/memory allocation).
+
+### Split-search optimizations
+
+Two changes to `src/fastgbm.cpp`'s split search closed most of the gap to
+`ranger` shown above (previously `fastgbm` trained 1.3-1.8x faster than
+`gbm`/`xgboost` but noticeably behind `ranger`; see `NEWS.md` for the exact
+before/after numbers):
+
+* The per-(node, feature) histogram accumulation used to make two full
+  passes over the node's rows -- one just to find the highest occupied bin,
+  a second to accumulate gradient/hessian sums into an array sized to that
+  bin. Since each feature's bin range is already known globally from the
+  initial binning pass, the array can be sized up front and both the
+  accumulation *and* the tightest split-loop bound obtained from a single
+  pass instead.
+* `RcppParallel::parallelFor()` was still being dispatched for large-enough
+  nodes even when `threads = 1L` was requested, paying real thread-pool
+  scheduling overhead for work that only ever ran on one thread. A single
+  explicit thread request now always takes the direct (serial) call path,
+  regardless of node/feature size.
+
+Both changes are behavior-preserving (identical split decisions, verified by
+the full existing test suite including the thread-count-determinism and
+finite-difference gradient/Hessian checks) -- they change only how fast the
+same computation runs, not what it computes.
 
 **PDP shape recovery**: since the true partial dependence of each feature is
 computable in closed form for this DGP (fixing `x_j` on a grid and averaging

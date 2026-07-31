@@ -67,6 +67,24 @@ bm <- bench::mark(
 
 print(bm[, c("expression", "min", "median", "itr/sec", "n_itr")])
 
+## All four models must grow exactly NTREES trees for the timing comparison to
+## be about training-algorithm speed, not "one model quietly did less work":
+## fastgbm has no `validation`/`early_stopping` above, so it cannot stop short;
+## gbm/ranger report their trained count directly; xgboost's `nrounds` (no
+## `early_stopping_rounds` passed) is a hard, unconditional iteration count.
+ntrees_fastgbm <- fastgbm(x, y = y, objective = "regression", ntrees = NTREES,
+                          learning_rate = LR, max_depth = MAX_DEPTH,
+                          min_node_size = MIN_NODE, threads = 1L, seed = SEED0, verbose = FALSE)$ntrees
+ntrees_gbm <- gbm::gbm(.y ~ ., data = df, distribution = "gaussian", n.trees = NTREES,
+                       interaction.depth = MAX_DEPTH, shrinkage = LR, n.minobsinnode = MIN_NODE,
+                       bag.fraction = 1, train.fraction = 1, verbose = FALSE)$n.trees
+ntrees_ranger <- ranger::ranger(.y ~ ., data = df, num.trees = NTREES, max.depth = MAX_DEPTH,
+                                min.node.size = MIN_NODE, num.threads = 1, seed = SEED0)$num.trees
+ntrees_all <- c(fastgbm = ntrees_fastgbm, gbm = ntrees_gbm, xgboost = NTREES, ranger = ntrees_ranger)
+message("Trees grown per model: ", paste(names(ntrees_all), ntrees_all, sep = "=", collapse = ", "))
+stopifnot("all models must train the same number of trees for a fair timing comparison" =
+  all(ntrees_all == NTREES))
+
 ## bench_mark objects carry list-columns (memory allocations, gc, per-iteration
 ## timings) that write.csv() can't serialize; keep only the scalar summary columns.
 bm_out <- as.data.frame(bm)
