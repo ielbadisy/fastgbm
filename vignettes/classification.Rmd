@@ -7,4 +7,48 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-Classification examples will be added here.
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+`objective = "binary"` fits a logistic classification model. The response
+must be 0/1 (numeric or logical) or a two-level factor.
+
+```{r}
+library(fastgbm)
+
+x <- as.matrix(mtcars[, c("mpg", "disp", "hp", "wt")])
+y <- mtcars$am  # 0 = automatic, 1 = manual
+
+fit <- fastgbm(
+  x, y = y, objective = "binary",
+  ntrees = 100L, learning_rate = 0.1, max_depth = 3L,
+  seed = 1L, verbose = FALSE
+)
+fit
+```
+
+`objective` can be omitted: `fastgbm()` defaults to `"binary"` whenever `y`
+is a 0/1 vector (or two-level factor).
+
+## Predictions and evaluation
+
+```{r}
+prob <- predict(fit, x, type = "response")  # predicted probabilities
+head(prob)
+
+link <- predict(fit, x, type = "link")      # log-odds
+head(link)
+
+metrics(fit, y = y)  # log loss
+mean((prob > 0.5) == y)  # training accuracy
+importance(fit)
+```
+
+## Formula interface
+
+```{r}
+dat <- mtcars
+dat$am <- factor(dat$am)
+fit2 <- fastgbm(am ~ mpg + disp + hp + wt, data = dat, ntrees = 100L, verbose = FALSE)
+```

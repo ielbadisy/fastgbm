@@ -8,30 +8,6 @@ fastgbm_validate_x <- function(x, allow_dataframe = TRUE) {
   x
 }
 
-fastgbm_validate_y <- function(y, objective = NULL) {
-  if (inherits(y, "Surv")) {
-    return(y)
-  }
-  if (is.factor(y)) {
-    if (nlevels(y) == 2L) {
-      y <- as.numeric(y == levels(y)[2L])
-    } else {
-      stop("Factor outcomes are only supported for binary classification.", call. = FALSE)
-    }
-  }
-  if (is.logical(y)) {
-    y <- as.numeric(y)
-  }
-  if (!is.numeric(y)) {
-    stop("`y` must be numeric, logical, or a binary factor.", call. = FALSE)
-  }
-  y <- as.numeric(y)
-  if (any(!is.finite(y))) {
-    stop("`y` must be finite.", call. = FALSE)
-  }
-  y
-}
-
 fastgbm_validate_survival <- function(time, status = NULL, y = NULL) {
   if (inherits(y, "Surv")) {
     time <- y[, 1]
@@ -42,7 +18,7 @@ fastgbm_validate_survival <- function(time, status = NULL, y = NULL) {
     time <- time[, 1]
   }
   if (is.null(time) || is.null(status)) {
-    stop("Survival objectives require `time` and `status`, or a `Surv` response.", call. = FALSE)
+    stop("`time` and `status` are required, or a `survival::Surv` response.", call. = FALSE)
   }
   time <- as.numeric(time)
   status <- as.integer(status)
@@ -60,18 +36,6 @@ fastgbm_validate_survival <- function(time, status = NULL, y = NULL) {
   }
   status <- as.integer(status)
   list(time = time, status = status)
-}
-
-fastgbm_default_objective <- function(y) {
-  if (inherits(y, "Surv")) {
-    return("survival:cox")
-  }
-  u <- sort(unique(y))
-  if (length(u) == 2L && all(u %in% c(0, 1))) {
-    "binary:logistic"
-  } else {
-    "reg:squarederror"
-  }
 }
 
 fastgbm_prepare_matrix <- function(x, formula_terms = NULL, xlevels = NULL, contrasts = NULL) {
@@ -96,73 +60,75 @@ fastgbm_prepare_matrix <- function(x, formula_terms = NULL, xlevels = NULL, cont
   x
 }
 
-fastgbm_prepare_response <- function(y, objective) {
-  y <- fastgbm_validate_y(y, objective)
-  if (inherits(y, "Surv")) {
-    return(y)
+fastgbm_transform_response <- function(raw, objective) {
+  if (identical(objective, "binary")) {
+    1 / (1 + exp(-pmin(pmax(raw, -35), 35)))
+  } else if (identical(objective, "regression")) {
+    raw
+  } else {
+    exp(raw)
   }
-  if (objective == "binary:logistic" && !all(y %in% c(0, 1))) {
-    stop("Binary logistic objective requires a 0/1 response.", call. = FALSE)
+}
+
+#' @noRd
+fastgbm_default_objective <- function(y) {
+  if (is.null(y)) {
+    stop("`y` is required when `objective` is not supplied and `x` is not a survival input.", call. = FALSE)
+  }
+  u <- sort(unique(fastgbm_validate_response(y, "regression", check_binary = FALSE)))
+  if (length(u) == 2L && all(u %in% c(0, 1))) "binary" else "regression"
+}
+
+#' @noRd
+fastgbm_validate_response <- function(y, objective, check_binary = TRUE) {
+  if (is.factor(y)) {
+    if (nlevels(y) != 2L) {
+      stop("Factor responses are only supported for binary classification (2 levels).", call. = FALSE)
+    }
+    y <- as.numeric(y == levels(y)[2L])
+  }
+  if (is.logical(y)) {
+    y <- as.numeric(y)
+  }
+  if (!is.numeric(y)) {
+    stop("`y` must be numeric, logical, or a two-level factor.", call. = FALSE)
+  }
+  y <- as.numeric(y)
+  if (any(!is.finite(y))) {
+    stop("`y` must be finite.", call. = FALSE)
+  }
+  if (check_binary && identical(objective, "binary") && !all(y %in% c(0, 1))) {
+    stop("`objective = \"binary\"` requires a 0/1 response.", call. = FALSE)
   }
   y
 }
 
-fastgbm_transform_response <- function(raw, objective) {
-  if (objective == "binary:logistic") {
-    1 / (1 + exp(-pmin(pmax(raw, -35), 35)))
-  } else if (objective %in% c("survival:cox", "survival:aft")) {
-    exp(raw)
-  } else {
-    raw
-  }
-}
-
-fastgbm_metric_name <- function(objective) {
-  switch(objective,
-    "reg:squarederror" = "rmse",
-    "binary:logistic" = "logloss",
-    "survival:cox" = "cindex",
-    "survival:aft" = "cindex",
-    "rmse"
-  )
-}
-
 fastgbm_survival_baseline <- function(time, status, lp) {
+  # Breslow baseline cumulative hazard: H0(t) = sum_{t_k <= t} d_k / sum_{i: time_i >= t_k} exp(lp_i).
+  # The risk set shrinks as t_k grows, so the per-event risk sum is obtained from a single
+  # descending cumulative sum of exp(lp) over time-sorted rows (O(n log n)), rather than an
+  # incremental accumulator that must actually remove departing subjects.
   o <- order(time)
   time <- time[o]
   status <- status[o]
-  lp <- lp[o]
-  et <- exp(pmin(lp, 35))
+  et <- exp(pmin(lp[o], 35))
   uniq_event_times <- sort(unique(time[status == 1L]))
   if (!length(uniq_event_times)) {
     return(list(times = numeric(), cumhaz = numeric()))
   }
-  cumhaz <- numeric(length(uniq_event_times))
-  risk_sum <- sum(et)
-  idx_desc <- order(time, decreasing = TRUE)
-  running <- 0.0
-  pos <- length(idx_desc)
-  seen <- rep(FALSE, length(time))
-  # Breslow baseline cumulative hazard on the training sample.
-  for (k in seq_along(uniq_event_times)) {
-    t_k <- uniq_event_times[k]
-    while (pos >= 1L && time[idx_desc[pos]] >= t_k) {
-      running <- running + et[idx_desc[pos]]
-      seen[idx_desc[pos]] <- TRUE
-      pos <- pos - 1L
-    }
-    d_k <- sum(status[time == t_k])
-    denom <- max(running, 1e-12)
-    cumhaz[k] <- if (k == 1L) d_k / denom else cumhaz[k - 1L] + d_k / denom
-  }
+  risk_sum_desc <- rev(cumsum(rev(et)))
+  first_idx <- match(uniq_event_times, time)
+  d_k <- vapply(uniq_event_times, function(t) sum(status[time == t]), numeric(1))
+  denom <- pmax(risk_sum_desc[first_idx], 1e-12)
+  cumhaz <- cumsum(d_k / denom)
   list(times = uniq_event_times, cumhaz = cumhaz)
 }
 
-fastgbm_survival_survprob <- function(baseline, lp, times, objective = "survival:cox", sigma = 1) {
+fastgbm_survival_survprob <- function(baseline, lp, times, objective = "cox", sigma = 1) {
   if (!length(times)) {
     return(matrix(numeric(), nrow = length(lp), ncol = 0L))
   }
-  if (objective == "survival:cox") {
+  if (objective == "cox") {
     if (is.null(baseline) || !length(baseline$times)) {
       return(matrix(1, nrow = length(lp), ncol = length(times)))
     }
@@ -203,31 +169,52 @@ survival_cindex <- function(time, status, score) {
   concordant / comparable
 }
 
+#' Evaluation metric for a fitted fastgbm model
+#'
+#' Harrell's C-index for survival objectives (`"cox"`, `"aft"`, `"pexp"`),
+#' RMSE for `"regression"`, and log loss for `"binary"`.
+#'
+#' @param object A fitted `fastgbm` object.
+#' @param newdata Optional new data.
+#' @param y Optional observed outcomes: a `survival::Surv` object for
+#'   survival objectives, or a numeric/logical/two-level-factor vector for
+#'   `"regression"`/`"binary"`. If omitted, returns the requested predictions
+#'   instead of a metric.
+#' @param type Prediction type used when `y` is omitted.
+#' @return A list with `objective`, `metric`, and `value`, or a numeric
+#'   vector of predictions if `y` is omitted.
+#' @export
 metrics <- function(object, newdata = NULL, y = NULL, type = c("response", "link")) {
   type <- match.arg(type)
-  if (is.null(newdata)) {
-    preds <- if (type == "link") object$fitted_raw else object$fitted
-  } else {
-    preds <- predict(object, newdata, type = type)
-  }
   if (is.null(y)) {
-    return(preds)
+    if (is.null(newdata)) {
+      return(if (type == "link") object$fitted_raw else object$fitted)
+    }
+    return(predict(object, newdata, type = type))
   }
-  y <- fastgbm_validate_y(y, object$objective)
-  if (inherits(y, "Surv")) {
-    y <- fastgbm_validate_survival(NULL, NULL, y)
-    return(list(
-      objective = object$objective,
-      metric = "cindex",
-      value = survival_cindex(y$time, y$status, preds)
-    ))
+  if (object$objective %in% c("regression", "binary")) {
+    y <- fastgbm_validate_response(y, object$objective)
+    pred <- if (is.null(newdata)) object$fitted else predict(object, newdata, type = "response")
+    if (object$objective == "binary") {
+      return(list(objective = object$objective, metric = "logloss", value = logloss(y, pred)))
+    }
+    return(list(objective = object$objective, metric = "rmse", value = rmse(y, pred)))
+  }
+  # Concordance needs a *risk* score (higher = earlier event). The Cox linear
+  # predictor already increases with risk. The AFT linear predictor estimates
+  # log(time) instead, which increases with *longer* survival, so it must be
+  # negated before it is comparable to a risk score. `type` only controls the
+  # scale (link vs response) requested elsewhere; for concordance we always use
+  # the (sign-corrected) linear predictor, since monotonic transforms of it do
+  # not change the ranking.
+  y <- fastgbm_validate_survival(NULL, NULL, y)
+  risk_score <- if (is.null(newdata)) object$fitted_raw else predict(object, newdata, type = "link")
+  if (object$objective == "aft") {
+    risk_score <- -risk_score
   }
   list(
     objective = object$objective,
-    metric = fastgbm_metric_name(object$objective),
-    value = switch(object$objective,
-      "binary:logistic" = logloss(y, preds),
-      rmse(y, preds)
-    )
+    metric = "cindex",
+    value = survival_cindex(y$time, y$status, risk_score)
   )
 }

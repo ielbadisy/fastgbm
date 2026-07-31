@@ -4,3 +4,5 @@
 *.Rcheck/
 ..Rcheck/
 .Rcheck/
+Rplots.pdf
+paper/*.pdf.bak

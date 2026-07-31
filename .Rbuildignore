@@ -2,3 +2,5 @@
 ^\\.git$
 ^\\.github$
 ^TASK-Build-fastgbm\\.md$
+^paper$
+^cran-comments\.md$

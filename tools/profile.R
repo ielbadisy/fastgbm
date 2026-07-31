@@ -1,9 +1,11 @@
 library(fastgbm)
 
 set.seed(1)
-x <- matrix(rnorm(1000), ncol = 5)
-y <- rnorm(nrow(x))
+n <- 1000
+x <- matrix(rnorm(n * 5), ncol = 5)
+time <- exp(rnorm(n))
+status <- rbinom(n, 1, 0.8)
 Rprof(tmp <- tempfile())
-fit <- fastgbm(x, y, objective = "reg:squarederror", ntrees = 20L, verbose = FALSE)
+fit <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 20L, verbose = FALSE)
 Rprof(NULL)
 summaryRprof(tmp)

@@ -35,7 +35,7 @@ fit_fastgbm <- timed(
     x_train,
     time = train$time,
     status = train$status01,
-    objective = "survival:cox",
+    objective = "cox",
     ntrees = 100L,
     learning_rate = 0.05,
     max_depth = 3L,

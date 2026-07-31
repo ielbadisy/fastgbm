@@ -7,4 +7,48 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-The package uses histogram-based splitting with greedy recursive tree growth.
+`fastgbm` implements second-order (Newton) gradient boosting with histogram-based
+split search.
+
+## Objectives
+
+For observation $i$ at iteration $m$, gradients $g_i = \partial \ell(y_i, F_i)/\partial F_i$
+and Hessians $h_i = \partial^2 \ell(y_i, F_i)/\partial F_i^2$ are computed for the
+current objective:
+
+* **Cox** (`objective = "cox"`): negative Cox partial log-likelihood, Breslow handling
+  of tied event times, with $g_i$/$h_i$ derived from cumulative risk-set sums computed
+  once per boosting round in $O(n \log n)$ (sort once, reuse the ordering).
+* **AFT** (`objective = "aft"`): negative log-likelihood of a normal location-scale
+  accelerated failure time model, with separate closed-form gradients/Hessians for
+  event vs. censored observations.
+
+## Split search
+
+For every node and feature: gradient and Hessian sums are accumulated by histogram bin
+(continuous features are pre-binned into up to `max_bins` quantile-based bins, default
+255), cumulative left/right statistics are computed, and every valid split point is
+scored by
+
+$$
+\text{Gain} = \frac12\left[\frac{G_L^2}{H_L+\lambda} + \frac{G_R^2}{H_R+\lambda} - \frac{(G_L+G_R)^2}{H_L+H_R+\lambda}\right] - \gamma,
+$$
+
+with missing values evaluated as routed both left and right; the better direction is
+stored as the node's default. Leaf values are $w_j = -G_j/(H_j+\lambda)$.
+
+## Parallelism
+
+The per-feature histogram/gain scan within each node is data-parallel (each feature's
+best split is independent of the others given the node's gradient/Hessian sums), so it
+is dispatched through `RcppParallel::parallelFor()` once the node/feature count
+crosses an internal threshold (below it, the same code path runs serially -- dispatch
+overhead isn't worth it for small nodes). Because the reduction across features is a
+fixed-order argmax rather than an order-dependent floating-point sum, training is
+bit-identical regardless of `threads`.
+
+## What's not yet implemented
+
+Leaf-wise (`grow_policy = "lossguide"`) growth, validation-based early stopping
+(accepted but inactive), monotonic/interaction constraints, and AFT distributions
+other than the normal.

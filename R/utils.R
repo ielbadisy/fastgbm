@@ -1,7 +1,3 @@
-fastgbm_sigmoid <- function(x) {
-  1 / (1 + exp(-pmin(pmax(x, -35), 35)))
-}
-
 fastgbm_as_matrix <- function(x) {
   if (is.data.frame(x)) {
     return(model.matrix(~ . - 1, data = x))
@@ -19,4 +15,15 @@ fastgbm_model_fields <- function(object) {
 
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
+}
+
+# Internal-only: exposes the compiled gradient/Hessian kernels for testing.
+fastgbm_grad_hess <- function(pred, time, status, objective) {
+  .Call(
+    "fastgbm_grad_hess_cpp",
+    as.numeric(pred),
+    as.numeric(time),
+    as.integer(status),
+    as.character(objective)
+  )
 }
