@@ -204,20 +204,20 @@ medians across repeats):
 
 | model | train time | RMSE |
 | --- | --- | --- |
-| fastgbm | 0.101s | 1.388 |
-| gbm | 0.146s | 1.281 |
-| xgboost | 0.197s | 1.388 |
-| ranger | 0.102s | 2.594 |
+| fastgbm | 0.099s | 1.403 |
+| gbm | 0.145s | 1.281 |
+| xgboost | 0.199s | 1.388 |
+| ranger | 0.104s | 2.594 |
 
-`fastgbm` trains ~1.4-2.0x faster than `gbm`/`xgboost` (win/loss/tie 10/0/0
-vs. each, paired across repeats) and is now essentially tied with `ranger`
-on median training time (win/loss/tie 5/5/0, and `fastgbm`'s own median is
-marginally faster: 0.1005s vs. 0.1015s), while clearly beating `ranger` on
-RMSE (10/0/0) and matching `xgboost` (6/4/0); `gbm` edges out `fastgbm` on
-RMSE here (0/10/0). Consistent with the survival benchmark: `fastgbm` is not
-a universal-accuracy win, but it is never far off and is now among the
-fastest, not just close to it -- see "Split-search optimizations" below for
-what closed the gap to `ranger`.
+`fastgbm` trains ~1.5-2.0x faster than `gbm`/`xgboost` (win/loss/tie 10/0/0
+vs. each, paired across repeats) and now *beats* `ranger` on median training
+time (win/loss/tie 6/3/1, `fastgbm`'s own median: 0.099s vs. `ranger`'s
+0.104s), while clearly beating `ranger` on RMSE (10/0/0) and roughly
+matching `xgboost` (5/5/0); `gbm` edges out `fastgbm` on RMSE here (0/10/0).
+Consistent with the survival benchmark: `fastgbm` is not a universal-accuracy
+win, but it is never far off and is now the fastest of the four on this
+benchmark, not just competitive -- see "Split-search optimizations" below
+for what closed (and then reversed) the gap to `ranger`.
 
 For a closer look at the *distribution* of training time, not just the
 median, `inst/benchmarks/run-benchmark-exectime.R` times all four models
@@ -237,10 +237,10 @@ summary (min/median/`itr/sec`/memory allocation).
 
 ### Split-search optimizations
 
-Two changes to `src/fastgbm.cpp`'s split search closed most of the gap to
-`ranger` shown above (previously `fastgbm` trained 1.3-1.8x faster than
-`gbm`/`xgboost` but noticeably behind `ranger`; see `NEWS.md` for the exact
-before/after numbers):
+Three changes to `src/fastgbm.cpp`'s split search closed, then reversed, the
+gap to `ranger` shown above (`fastgbm` went from training 1.3-1.8x faster
+than `gbm`/`xgboost` but noticeably behind `ranger`, to now beating all
+three; see `NEWS.md` for the exact before/after numbers at each step):
 
 * The per-(node, feature) histogram accumulation used to make two full
   passes over the node's rows -- one just to find the highest occupied bin,
@@ -254,11 +254,26 @@ before/after numbers):
   scheduling overhead for work that only ever ran on one thread. A single
   explicit thread request now always takes the direct (serial) call path,
   regardless of node/feature size.
+* Every node recomputed its total gradient/Hessian sum (`G`/`H`, needed both
+  for the leaf value and the split-gain formula) with a fresh full pass over
+  its rows -- but those exact sums were already produced as a byproduct of
+  the *parent's* winning split (`GL`/`HL`/`GR`/`HR` in the histogram scan
+  above). Passing them down instead of recomputing removes a second full
+  pass per node, on top of the split search itself.
 
-Both changes are behavior-preserving (identical split decisions, verified by
-the full existing test suite including the thread-count-determinism and
-finite-difference gradient/Hessian checks) -- they change only how fast the
-same computation runs, not what it computes.
+The first two changes are exactly behavior-preserving (bit-identical split
+decisions and benchmark output). The third is not -- it sums the same
+grad/Hessian values in a different order (histogram-bin order for a child's
+inherited `G`/`H`, vs. row order for a fresh sum), which is a legitimate
+floating-point reassociation, not a bug, but can occasionally tip a
+near-tied split threshold and lead to a different-but-equally-valid tree.
+This was verified directly, not just assumed: a dedicated test
+(`tests/testthat/test-tree-building.R`) independently recomputes each leaf's
+`-G/(H+lambda)` in R from the actual rows that reach it (with `subsample`/
+`colsample` fixed at `1` so the true set of rows is unambiguous) and checks
+it against the compiled value to `1e-10` -- along with the full existing
+test suite (thread-count-determinism, finite-difference gradient/Hessian
+checks), all passing.
 
 ### Scaling behavior vs. n, p, and threads
 

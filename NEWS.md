@@ -1,5 +1,33 @@
 # fastgbm 0.1.0 (unreleased)
 
+## Split-search performance: child G/H inherited from the parent's split, not recomputed
+
+* Every node in `build_tree()`'s `grow()` recomputed its total
+  gradient/Hessian sum (`G`/`H`) with a fresh full pass over its own rows,
+  even though those exact values were already produced as a byproduct of
+  the *parent's* winning split (`GL`/`HL`/`GR`/`HR`, captured in
+  `NodeSplit`'s new fields during the `SplitFinder` histogram scan). `G`/`H`
+  are now passed down to each child instead, removing a second full O(rows)
+  pass per node on top of the split search itself; only the root node (no
+  parent split to inherit from) still computes them directly, once.
+* Unlike the two changes below, this one is not bit-identical to before: it
+  sums the same values in a different order (histogram-bin order inherited
+  from the parent vs. row order for a from-scratch sum), a legitimate
+  floating-point reassociation that can occasionally tip a near-tied split
+  threshold and produce a different-but-equally-valid tree. Verified
+  directly rather than assumed correct: a new test
+  (`tests/testthat/test-tree-building.R`) independently recomputes each
+  leaf's `-G/(H+lambda)` in R from the actual rows reaching it (`subsample`/
+  `colsample` fixed at `1` so that set is unambiguous) and checks it against
+  the compiled value to `1e-10`, plus a multi-threaded-vs-single-threaded
+  identical-tree check; both pass, along with the full pre-existing suite
+  (225 tests, unchanged).
+* Net effect on the Friedman1 benchmark (same setup as below): `fastgbm`
+  training time dropped further, from ~147ms to ~143-146ms, turning the
+  prior statistical tie with `ranger` into a narrow but real win (median
+  training time 0.099s vs. `ranger`'s 0.104s over 10 repeated splits,
+  win/loss/tie 6/3/1; see `inst/benchmarks/run-benchmark-regression.R`).
+
 ## Scaling benchmark: n x p x threads, plus tuning tips
 
 * Added `inst/benchmarks/run-benchmark-scaling.R`: sweeps `n` in

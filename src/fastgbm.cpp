@@ -27,6 +27,10 @@ struct NodeSplit {
   int threshold = -1;
   bool missing_left = true;
   double gain = -INFINITY;
+  // Exact child gradient/Hessian sums for the winning split, already computed
+  // as a byproduct of the histogram scan below -- passed down to the child
+  // `grow()` calls instead of recomputing them with a fresh O(rows) pass.
+  double GL = 0.0, HL = 0.0, GR = 0.0, HR = 0.0;
 };
 
 static std::vector<double> make_cuts(const std::vector<double>& values, int max_bins) {
@@ -190,6 +194,7 @@ struct SplitFinder : public Worker {
             local.threshold = t;
             local.missing_left = (missing_side == 0);
             local.gain = gain;
+            local.GL = GL; local.HL = HL; local.GR = GR; local.HR = HR;
           }
         }
       }
@@ -221,15 +226,16 @@ static TreeModel build_tree(const IntegerMatrix& bins, const NumericVector& grad
   tree.nodes.reserve(2 * rows.size() + 1);
   std::uniform_real_distribution<double> ur(0.0, 1.0);
 
-  std::function<int(const std::vector<int>&, int)> grow = [&](const std::vector<int>& node_rows, int depth) -> int {
+  // `G`/`H` (this node's total gradient/Hessian sum) are passed in rather than
+  // recomputed from `node_rows` at every call: for any non-root node, they were
+  // already computed exactly as the winning split's GL/HL or GR/HR during the
+  // parent's histogram scan (SplitFinder, above) -- reusing them removes a second
+  // full O(rows) pass per node, on top of the split search itself.
+  std::function<int(const std::vector<int>&, int, double, double)> grow =
+      [&](const std::vector<int>& node_rows, int depth, double G, double H) -> int {
     int node_id = static_cast<int>(tree.nodes.size());
     tree.nodes.push_back(TreeNode{});
 
-    double G = 0.0, H = 0.0;
-    for (int r : node_rows) {
-      G += grad[r];
-      H += hess[r];
-    }
     double leaf_value = -G / (H + lambda);
     tree.nodes[node_id].value = leaf_value;
 
@@ -294,13 +300,20 @@ static TreeModel build_tree(const IntegerMatrix& bins, const NumericVector& grad
     tree.nodes[node_id].feature = best.feature;
     tree.nodes[node_id].threshold = best.threshold;
     tree.nodes[node_id].missing_left = best.missing_left;
-    tree.nodes[node_id].left = grow(left_rows, depth + 1);
-    tree.nodes[node_id].right = grow(right_rows, depth + 1);
+    tree.nodes[node_id].left = grow(left_rows, depth + 1, best.GL, best.HL);
+    tree.nodes[node_id].right = grow(right_rows, depth + 1, best.GR, best.HR);
     importance[best.feature] += std::max(0.0, best.gain);
     return node_id;
   };
 
-  grow(rows, 0);
+  // Only the root's G/H genuinely has no parent split to inherit them from;
+  // every other node gets them passed down for free (see `grow()` above).
+  double G0 = 0.0, H0 = 0.0;
+  for (int r : rows) {
+    G0 += grad[r];
+    H0 += hess[r];
+  }
+  grow(rows, 0, G0, H0);
   return tree;
 }
 
