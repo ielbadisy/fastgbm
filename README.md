@@ -216,6 +216,21 @@ each, paired across repeats) and is roughly `ranger`-speed (win/loss/tie
 with the survival benchmark: `fastgbm` is not a universal-accuracy win, but
 it is never far off and is consistently among the fastest.
 
+For a closer look at the *distribution* of training time, not just the
+median, `inst/benchmarks/run-benchmark-exectime.R` times all four models on
+one fixed 2,000-row Friedman1 draw with
+[`bench::mark()`](https://bench.r-lib.org/) (`benchr`, originally used for
+this, was archived off CRAN in November 2025; `bench` is the actively
+maintained equivalent), which reruns each model until it has collected at
+least 10 timings:
+
+![bench::mark() training-time distribution for fastgbm, gbm, xgboost, and ranger on Friedman1](inst/benchmarks/regression-exectime-bench.png)
+
+`fastgbm` and `ranger` cluster tightly around 145-165ms with no overlap into
+`gbm`/`xgboost`'s 200-210ms band, matching the median-based table above.
+See `inst/benchmarks/regression-exectime-bench.csv` for the full
+`bench::mark()` summary (min/median/`itr/sec`/memory allocation).
+
 **PDP shape recovery**: since the true partial dependence of each feature is
 computable in closed form for this DGP (fixing `x_j` on a grid and averaging
 the true mean function over the observed rows), `pdp()` on the fitted
