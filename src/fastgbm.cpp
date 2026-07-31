@@ -2,7 +2,6 @@
 #include <RcppParallel.h>
 #include <algorithm>
 #include <cmath>
-#include <functional>
 #include <random>
 #include <vector>
 
@@ -90,48 +89,68 @@ static List make_tree_list(const TreeModel& tree) {
   );
 }
 
-// Computes the best split for a subset of features (indices [begin, end) into
-// `feature_ids`) into `results`, one entry per feature. Reads Rcpp objects only
-// through the thread-safe RMatrix/RVector wrappers, per RcppParallel's contract
-// that raw Rcpp/R objects must not be touched from worker threads. Writes are to
-// disjoint `results[idx]` slots, so calling this directly (serial) or through
-// `parallelFor` (parallel) produces bit-identical results regardless of thread
-// count or scheduling -- the split search is a data-parallel reduction over
-// features, not an accumulation, so there is no order-dependent floating-point
+// A node awaiting its split search, at the current level of a breadth-first
+// (level-wise) tree-growing pass -- see build_tree() below.
+struct NodeContext {
+  const std::vector<int>* rows;
+  double G, H;
+};
+
+// Computes the best split for a *batch of (node, feature) tasks spanning every
+// node active at the current tree level*, not just one node's sampled features.
+// Task `idx` searches feature `task_feature[idx]` for node `task_node[idx]`
+// (an index into `node_ctx`); `results[idx]` gets that task's best split.
+// Reads Rcpp objects only through the thread-safe RMatrix/RVector wrappers, per
+// RcppParallel's contract that raw Rcpp/R objects must not be touched from
+// worker threads. Writes are to disjoint `results[idx]` slots regardless of how
+// tasks are distributed across nodes, so calling this directly (serial) or
+// through `parallelFor` (parallel) produces bit-identical results regardless of
+// thread count or scheduling -- the split search is a data-parallel reduction
+// over tasks, not an accumulation, so there is no order-dependent floating-point
 // summation across threads.
-struct SplitFinder : public Worker {
+//
+// Batching every active node's tasks into one combined range (rather than one
+// `parallelFor` call per node, as an earlier version did) is what actually lets
+// multi-threading pay off deep in a tree: a single node's own row/feature count
+// shrinks every level, but the *whole level's* combined task count does not
+// shrink nearly as fast (each level roughly halves per-node rows while roughly
+// doubling the number of nodes), so there is enough work to parallelize even
+// several levels down, where per-node dispatch had already run out of headroom.
+struct LevelSplitFinder : public Worker {
   const RMatrix<int> bins;
   const RVector<double> grad;
   const RVector<double> hess;
-  const std::vector<int>& node_rows;
-  const std::vector<int>& feature_ids;
   const std::vector<int>& max_bin_by_feature;
-  double G, H, lambda, gamma, min_child_weight;
+  double lambda, gamma, min_child_weight;
+  const std::vector<NodeContext>& node_ctx;
+  const std::vector<int>& task_node;
+  const std::vector<int>& task_feature;
   std::vector<NodeSplit>& results;
 
-  SplitFinder(const IntegerMatrix& bins_, const NumericVector& grad_, const NumericVector& hess_,
-             const std::vector<int>& node_rows_, const std::vector<int>& feature_ids_,
-             const std::vector<int>& max_bin_by_feature_,
-             double G_, double H_, double lambda_, double gamma_, double min_child_weight_,
-             std::vector<NodeSplit>& results_)
-    : bins(bins_), grad(grad_), hess(hess_), node_rows(node_rows_), feature_ids(feature_ids_),
-      max_bin_by_feature(max_bin_by_feature_),
-      G(G_), H(H_), lambda(lambda_), gamma(gamma_), min_child_weight(min_child_weight_),
+  LevelSplitFinder(const IntegerMatrix& bins_, const NumericVector& grad_, const NumericVector& hess_,
+                   const std::vector<int>& max_bin_by_feature_,
+                   double lambda_, double gamma_, double min_child_weight_,
+                   const std::vector<NodeContext>& node_ctx_,
+                   const std::vector<int>& task_node_, const std::vector<int>& task_feature_,
+                   std::vector<NodeSplit>& results_)
+    : bins(bins_), grad(grad_), hess(hess_), max_bin_by_feature(max_bin_by_feature_),
+      lambda(lambda_), gamma(gamma_), min_child_weight(min_child_weight_),
+      node_ctx(node_ctx_), task_node(task_node_), task_feature(task_feature_),
       results(results_) {}
 
   void operator()(std::size_t begin, std::size_t end) {
-    // Reused across every (node, feature) call on this thread instead of a fresh
-    // heap allocation each time -- `parallelFor` gives each worker thread disjoint
-    // index ranges (never called concurrently on the same thread), so a
-    // `thread_local` buffer is race-free while eliminating what was, for small/
-    // moderate datasets, the dominant fixed cost of the split search (allocating
-    // and freeing two ~256-double vectors per feature per node, over thousands of
-    // node visits across a boosting run).
+    // Reused across every task on this thread instead of a fresh heap allocation
+    // each time -- `parallelFor` gives each worker thread disjoint index ranges
+    // (never called concurrently on the same thread), so a `thread_local` buffer
+    // is race-free while eliminating a per-task allocation.
     thread_local std::vector<double> gsum_buf;
     thread_local std::vector<double> hsum_buf;
 
     for (std::size_t idx = begin; idx < end; ++idx) {
-      int feature = feature_ids[idx];
+      const std::vector<int>& node_rows = *node_ctx[task_node[idx]].rows;
+      double G = node_ctx[task_node[idx]].G;
+      double H = node_ctx[task_node[idx]].H;
+      int feature = task_feature[idx];
       // Bin index range for this feature is already known globally (computed once
       // in fastgbm_fit_cpp), so the buffer can be sized without a separate pass
       // over `node_rows` first -- accumulation and the tightest-possible
@@ -211,10 +230,25 @@ struct SplitFinder : public Worker {
 // not a novel invention -- it decorrelates sibling/descendant splits within a
 // single tree far more than per-tree sampling does, which is the core
 // mechanism behind random forests' variance reduction over boosting's
-// sequential, correlated trees. `rng` is advanced in strict node-visit order
-// (depth-first, left child before right), which is itself independent of how
-// many threads the split search inside a node uses, so this preserves the
-// existing determinism-across-thread-counts guarantee.
+// sequential, correlated trees. `rng` is advanced in a strict, thread-count-
+// independent order: breadth-first, one level of the tree at a time, in
+// left-to-right node order within each level (see below) -- this is a
+// different traversal order than an earlier depth-first version, so it draws
+// a different (but equally valid) sequence of colsample subsets for the same
+// seed; what is preserved is that the order never depends on how the split
+// search inside a level is threaded.
+//
+// Tree growth is breadth-first (level-wise) rather than one recursive node at
+// a time: every node at the current depth that still needs splitting has its
+// (node, feature) split-search tasks pooled into a single combined batch (see
+// LevelSplitFinder above) before any of them run. This is what makes
+// multi-threading actually pay off several levels into a tree, not just near
+// the root -- a single node's own row/feature count shrinks fast as depth
+// increases, but the combined task count across an entire level shrinks much
+// more slowly (each level has roughly twice as many nodes with roughly half
+// the rows each), so there is enough work per `parallelFor()` dispatch to be
+// worth parallelizing even deep in the tree, where per-node dispatch (an
+// earlier version of this function) had already run out of headroom.
 static TreeModel build_tree(const IntegerMatrix& bins, const NumericVector& grad,
                             const NumericVector& hess, const std::vector<int>& rows,
                             int max_depth, int min_node_size, double lambda,
@@ -226,94 +260,145 @@ static TreeModel build_tree(const IntegerMatrix& bins, const NumericVector& grad
   tree.nodes.reserve(2 * rows.size() + 1);
   std::uniform_real_distribution<double> ur(0.0, 1.0);
 
-  // `G`/`H` (this node's total gradient/Hessian sum) are passed in rather than
-  // recomputed from `node_rows` at every call: for any non-root node, they were
-  // already computed exactly as the winning split's GL/HL or GR/HR during the
-  // parent's histogram scan (SplitFinder, above) -- reusing them removes a second
-  // full O(rows) pass per node, on top of the split search itself.
-  std::function<int(const std::vector<int>&, int, double, double)> grow =
-      [&](const std::vector<int>& node_rows, int depth, double G, double H) -> int {
-    int node_id = static_cast<int>(tree.nodes.size());
-    tree.nodes.push_back(TreeNode{});
-
-    double leaf_value = -G / (H + lambda);
-    tree.nodes[node_id].value = leaf_value;
-
-    if (depth >= max_depth || static_cast<int>(node_rows.size()) < 2 * min_node_size || H < min_child_weight) {
-      return node_id;
-    }
-
-    std::vector<int> feature_ids;
-    feature_ids.reserve(p);
-    for (int j = 0; j < p; ++j) {
-      if (colsample >= 1.0 || ur(rng) < colsample) feature_ids.push_back(j);
-    }
-    if (feature_ids.empty()) {
-      for (int j = 0; j < p; ++j) feature_ids.push_back(j);
-    }
-
-    std::vector<NodeSplit> results(feature_ids.size());
-    SplitFinder worker(bins, grad, hess, node_rows, feature_ids, max_bin_by_feature, G, H, lambda, gamma, min_child_weight, results);
-    // Parallel dispatch overhead is not worth it for small nodes/feature counts,
-    // *or* when only one thread was requested (`threads = 1L`) -- RcppParallel's
-    // parallelFor() still pays its scheduling/dispatch cost even with a single
-    // worker thread, so an explicit single-thread request always takes the direct
-    // call, regardless of node/feature size. This matters in practice: it is the
-    // single-threaded regime every "fair comparison" benchmark against
-    // single-threaded competitors (ranger, gbm, xgboost with nthread=1) uses, and
-    // that dispatch overhead was paid at every sufficiently-large node across
-    // every tree in the run.
-    if (num_threads != 1 && feature_ids.size() >= 8 && node_rows.size() >= 256) {
-      parallelFor(0, feature_ids.size(), worker, /*grainSize=*/1, num_threads);
-    } else {
-      worker(0, feature_ids.size());
-    }
-
-    NodeSplit best;
-    for (const NodeSplit& r : results) {
-      if (r.feature >= 0 && r.gain > best.gain) best = r;
-    }
-
-    if (best.feature < 0 || !R_finite(best.gain) || best.gain <= 0.0) {
-      return node_id;
-    }
-
-    std::vector<int> left_rows;
-    std::vector<int> right_rows;
-    left_rows.reserve(node_rows.size());
-    right_rows.reserve(node_rows.size());
-    for (int r : node_rows) {
-      int b = bins(r, best.feature);
-      if (b == 0) {
-        if (best.missing_left) left_rows.push_back(r);
-        else right_rows.push_back(r);
-      } else if (b <= best.threshold) {
-        left_rows.push_back(r);
-      } else {
-        right_rows.push_back(r);
-      }
-    }
-    if (left_rows.empty() || right_rows.empty()) {
-      return node_id;
-    }
-
-    tree.nodes[node_id].feature = best.feature;
-    tree.nodes[node_id].threshold = best.threshold;
-    tree.nodes[node_id].missing_left = best.missing_left;
-    tree.nodes[node_id].left = grow(left_rows, depth + 1, best.GL, best.HL);
-    tree.nodes[node_id].right = grow(right_rows, depth + 1, best.GR, best.HR);
-    importance[best.feature] += std::max(0.0, best.gain);
-    return node_id;
+  struct FrontierNode {
+    int node_id;
+    std::vector<int> rows;
+    double G, H;
   };
 
   // Only the root's G/H genuinely has no parent split to inherit them from;
-  // every other node gets them passed down for free (see `grow()` above).
+  // every node created below gets them for free from the split that created it.
   double G0 = 0.0, H0 = 0.0;
   for (int r : rows) {
     G0 += grad[r];
     H0 += hess[r];
   }
-  grow(rows, 0, G0, H0);
+  tree.nodes.push_back(TreeNode{});
+  tree.nodes[0].value = -G0 / (H0 + lambda);
+
+  std::vector<FrontierNode> frontier;
+  frontier.push_back(FrontierNode{0, rows, G0, H0});
+
+  for (int depth = 0; depth < max_depth && !frontier.empty(); ++depth) {
+    // First pass over the level: decide which frontier nodes are even worth a
+    // split search (depth is already guaranteed by the loop bound), and draw
+    // each one's sampled feature subset -- in frontier order, so this is fixed
+    // regardless of thread count. Nodes that fail the size/weight check are
+    // left as leaves (their value was already set when they were created).
+    std::vector<int> active_idx;
+    std::vector<std::vector<int>> active_feature_ids;
+    for (std::size_t i = 0; i < frontier.size(); ++i) {
+      const FrontierNode& fn = frontier[i];
+      if (static_cast<int>(fn.rows.size()) < 2 * min_node_size || fn.H < min_child_weight) {
+        continue;
+      }
+      std::vector<int> feature_ids;
+      feature_ids.reserve(p);
+      for (int j = 0; j < p; ++j) {
+        if (colsample >= 1.0 || ur(rng) < colsample) feature_ids.push_back(j);
+      }
+      if (feature_ids.empty()) {
+        for (int j = 0; j < p; ++j) feature_ids.push_back(j);
+      }
+      active_idx.push_back(static_cast<int>(i));
+      active_feature_ids.push_back(std::move(feature_ids));
+    }
+    if (active_idx.empty()) break;
+
+    // Pool every active node's split-search tasks into one combined batch,
+    // grouped contiguously by node so each node's own results are a known,
+    // fixed [start, count) slice for the reduction after the parallel region.
+    std::vector<NodeContext> node_ctx(active_idx.size());
+    std::vector<int> task_node;
+    std::vector<int> task_feature;
+    for (std::size_t k = 0; k < active_idx.size(); ++k) {
+      node_ctx[k].rows = &frontier[active_idx[k]].rows;
+      node_ctx[k].G = frontier[active_idx[k]].G;
+      node_ctx[k].H = frontier[active_idx[k]].H;
+      for (int f : active_feature_ids[k]) {
+        task_node.push_back(static_cast<int>(k));
+        task_feature.push_back(f);
+      }
+    }
+    int total_tasks = static_cast<int>(task_node.size());
+
+    std::vector<NodeSplit> results(total_tasks);
+    LevelSplitFinder worker(bins, grad, hess, max_bin_by_feature, lambda, gamma, min_child_weight,
+                            node_ctx, task_node, task_feature, results);
+    // Parallel dispatch overhead is not worth it for a small combined task count,
+    // *or* when only one thread was requested (`threads = 1L`) -- RcppParallel's
+    // parallelFor() still pays its scheduling/dispatch cost even with a single
+    // worker thread, so an explicit single-thread request always takes the direct
+    // call. This matters in practice: it is the single-threaded regime every "fair
+    // comparison" benchmark against single-threaded competitors (ranger, gbm,
+    // xgboost with nthread=1) uses.
+    if (num_threads != 1 && total_tasks >= 8) {
+      parallelFor(0, total_tasks, worker, /*grainSize=*/1, num_threads);
+    } else {
+      worker(0, total_tasks);
+    }
+
+    // Per active node, reduce over its own contiguous slice of `results` to find
+    // its best split, then partition its rows and create its children (queued
+    // into `next_frontier` for the following level). Nodes not selected for a
+    // valid split above, or whose best split turned out degenerate/non-positive-
+    // gain, are left as the leaves they already are.
+    std::vector<FrontierNode> next_frontier;
+    next_frontier.reserve(2 * active_idx.size());
+    std::size_t task_cursor = 0;
+    for (std::size_t k = 0; k < active_idx.size(); ++k) {
+      FrontierNode& fn = frontier[active_idx[k]];
+      std::size_t n_tasks_k = active_feature_ids[k].size();
+      NodeSplit best;
+      for (std::size_t t = 0; t < n_tasks_k; ++t) {
+        const NodeSplit& r = results[task_cursor + t];
+        if (r.feature >= 0 && r.gain > best.gain) best = r;
+      }
+      task_cursor += n_tasks_k;
+
+      if (best.feature < 0 || !R_finite(best.gain) || best.gain <= 0.0) {
+        continue;
+      }
+
+      std::vector<int> left_rows, right_rows;
+      left_rows.reserve(fn.rows.size());
+      right_rows.reserve(fn.rows.size());
+      for (int r : fn.rows) {
+        int b = bins(r, best.feature);
+        if (b == 0) {
+          if (best.missing_left) left_rows.push_back(r);
+          else right_rows.push_back(r);
+        } else if (b <= best.threshold) {
+          left_rows.push_back(r);
+        } else {
+          right_rows.push_back(r);
+        }
+      }
+      if (left_rows.empty() || right_rows.empty()) {
+        continue;
+      }
+
+      int left_id = static_cast<int>(tree.nodes.size());
+      tree.nodes.push_back(TreeNode{});
+      tree.nodes[left_id].value = -best.GL / (best.HL + lambda);
+      int right_id = static_cast<int>(tree.nodes.size());
+      tree.nodes.push_back(TreeNode{});
+      tree.nodes[right_id].value = -best.GR / (best.HR + lambda);
+
+      tree.nodes[fn.node_id].feature = best.feature;
+      tree.nodes[fn.node_id].threshold = best.threshold;
+      tree.nodes[fn.node_id].missing_left = best.missing_left;
+      tree.nodes[fn.node_id].left = left_id;
+      tree.nodes[fn.node_id].right = right_id;
+      importance[best.feature] += std::max(0.0, best.gain);
+
+      next_frontier.push_back(FrontierNode{left_id, std::move(left_rows), best.GL, best.HL});
+      next_frontier.push_back(FrontierNode{right_id, std::move(right_rows), best.GR, best.HR});
+    }
+
+    frontier = std::move(next_frontier);
+  }
+
   return tree;
 }
 

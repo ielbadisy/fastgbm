@@ -204,19 +204,20 @@ medians across repeats):
 
 | model | train time | RMSE |
 | --- | --- | --- |
-| fastgbm | 0.099s | 1.403 |
-| gbm | 0.145s | 1.281 |
-| xgboost | 0.199s | 1.388 |
-| ranger | 0.104s | 2.594 |
+| fastgbm | 0.087s | 1.386 |
+| gbm | 0.143s | 1.281 |
+| xgboost | 0.198s | 1.388 |
+| ranger | 0.102s | 2.594 |
 
-`fastgbm` trains ~1.5-2.0x faster than `gbm`/`xgboost` (win/loss/tie 10/0/0
+`fastgbm` trains ~1.6-2.3x faster than `gbm`/`xgboost` (win/loss/tie 10/0/0
 vs. each, paired across repeats) and now *beats* `ranger` on median training
-time (win/loss/tie 6/3/1, `fastgbm`'s own median: 0.099s vs. `ranger`'s
-0.104s), while clearly beating `ranger` on RMSE (10/0/0) and roughly
-matching `xgboost` (5/5/0); `gbm` edges out `fastgbm` on RMSE here (0/10/0).
+time (win/loss/tie 7/3/0, `fastgbm`'s own median: 0.087s vs. `ranger`'s
+0.102s), while clearly beating `ranger` on RMSE (10/0/0) and roughly
+matching `xgboost` (6/4/0); `gbm` edges out `fastgbm` on RMSE here (0/10/0).
 Consistent with the survival benchmark: `fastgbm` is not a universal-accuracy
 win, but it is never far off and is now the fastest of the four on this
-benchmark, not just competitive -- see "Split-search optimizations" below
+benchmark, not just competitive -- see "Split-search optimizations" and
+"Level-wise tree growth" below
 for what closed (and then reversed) the gap to `ranger`.
 
 For a closer look at the *distribution* of training time, not just the
@@ -312,10 +313,83 @@ parallelism:
 
 ![fastgbm multi-threaded speedup vs thread count, n=20000 p=100](inst/benchmarks/scaling-benchmark-threads.png)
 
-1.4x at 2 threads, 1.8x at 4 threads, 2.3x at 16 threads -- real, but nowhere
-near the dashed ideal-linear line, and not worth reaching for on small data
-(`threads = 1L` already skips `parallelFor()`'s dispatch overhead entirely;
-see "Split-search optimizations" above).
+1.6x at 2 threads, 2.3x at 4 threads, 3.0x at 16 threads (with the level-wise
+tree-growth engine described further below; an earlier per-node-parallel
+version reached only ~2.3x at 16 threads) -- real, and improved, but still
+nowhere near the dashed ideal-linear line, and not worth reaching for on
+small data (`threads = 1L` already skips `parallelFor()`'s dispatch overhead
+entirely; see "Split-search optimizations" above).
+
+### Multi-threaded head-to-head: the single-threaded win does not fully survive
+
+Everything above (including "`fastgbm` now beats `ranger`" earlier in this
+section) was single-threaded. `ranger` and `xgboost` also support
+multi-threading, and each parallelizes completely differently from
+`fastgbm`: `ranger` splits independent *trees* across threads (embarrassingly
+parallel), `xgboost`'s histogram build is parallelized more thoroughly across
+both rows and features, and `fastgbm` (see "Level-wise tree growth" below)
+parallelizes the combined split-search workload across every node active at
+one tree level at a time. `inst/benchmarks/run-benchmark-multithreaded.R`
+checks this directly at `n = 20000, p = 100` (the largest grid point above),
+threads in `{1, 4, 12}`, median of 5 repeats (`gbm` has no thread-count
+control for a single fit and is shown only as a fixed single-threaded
+reference line):
+
+![absolute training time vs thread count for fastgbm, ranger, xgboost at n=20000, p=100](inst/benchmarks/multithread-benchmark.png)
+![per-model speedup vs each model's own threads=1 time, same data](inst/benchmarks/multithread-speedup.png)
+
+At `threads = 1`, `fastgbm` (~3.3s) is faster than `ranger` (~4.6s), matching
+the single-threaded story above, though both are behind `xgboost` (~1.6s) at
+this large `n x p` (absolute times here run a bit higher across all models
+than the scaling-sweep numbers above -- machine load varies between runs;
+what is stable across repeated runs of this benchmark is the *relative
+ordering and shape* of the three speedup curves, which is what matters for
+the conclusion below). By `threads = 12`, `fastgbm` reaches ~5.2x speedup vs.
+`ranger`'s ~9.7x and `xgboost`'s ~6.0x -- so in absolute terms `fastgbm`
+(~0.64s) ends up the *slowest* of the three at this thread count, behind
+`ranger` (~0.47s) and `xgboost` (~0.27s). The takeaway is not "fastgbm is
+slow" -- it is that **`fastgbm`'s speed
+advantage is concentrated in the single-/few-threaded regime**, because its
+parallelism has structurally less to work with per dispatch than an entire
+forest's independent trees or a histogram build parallelized across rows and
+features both. If your workflow already runs on a many-core machine and
+wall-clock time is the only thing that matters, `ranger`/`xgboost` at a high
+thread count may still win even where `fastgbm` wins single-threaded.
+
+### Level-wise tree growth
+
+An earlier version of `src/fastgbm.cpp` parallelized the split search once
+per node (across that node's own sampled features). That works fine near the
+root, but a single node's row/feature count shrinks fast with depth, while
+the *fixed* cost of dispatching a `parallelFor()` call does not -- so by a
+few levels in, most nodes no longer had enough work to make parallel dispatch
+worthwhile, and multi-threading's benefit tailed off deep in the tree, right
+where a lot of the total node count actually lives.
+
+`build_tree()` now grows a tree breadth-first, one full level at a time: every
+node active at the current depth has its split-search tasks (one per sampled
+feature) pooled into a *single combined batch* before any of them run, and
+that whole batch is what gets parallelized. This keeps the per-dispatch work
+large even deep in a tree, because each level roughly doubles its node count
+while roughly halving each node's row count -- the total combined work per
+level stays close to constant, unlike a single node's shrinking share of it.
+Verified two ways before trusting it: the existing leaf-value correctness
+test (independently recomputing `-G/(H+lambda)` from the actual rows reaching
+each leaf) and a new multi-threaded-vs-single-threaded identical-tree check
+both pass (`tests/testthat/test-tree-building.R`), confirming the new growth
+order is still exactly correct and still thread-count-deterministic, even
+though tree structure differs from the earlier depth-first version (it draws
+`colsample` subsets in a different, but equally valid, order).
+
+Net effect, same `n = 20000, p = 100` setup as the head-to-head above:
+`fastgbm`'s own speedup improved from ~1.9x/~3.3x (4/12 threads, prior
+per-node dispatch) to ~2.8x/~5.2x -- a real, measured gain, not just a
+plausible-sounding idea (a first attempt, increasing `parallelFor()`'s grain
+size to reduce per-task scheduling overhead, was tried and measured *worse*,
+and was reverted -- see `NEWS.md`). It narrows the gap to `ranger`/`xgboost`'s
+steeper scaling curves without closing it; matching a fully independent
+per-tree or per-row-block parallelism model would need a larger, different
+change than tuning the existing within-level split search further.
 
 **Tuning tips for runtime, in rough order of expected impact:**
 
@@ -324,11 +398,15 @@ see "Split-search optimizations" above).
    wide data) and check whether the accuracy cost is acceptable for your
    dataset -- it was small-to-neutral on every survival benchmark dataset
    tested so far, but that is not a guarantee for every dataset.
-2. **Large `n` and/or `p`: set `threads` explicitly (or leave the `0L`
-   default for "automatic").** Parallelism only pays for itself once nodes
-   are big enough to cross the internal `parallelFor()` threshold (>= 256
-   rows, >= 8 sampled features) -- exactly the large-data regime. Don't
-   bother tuning this for small data; there is nothing to parallelize.
+2. **Have many idle cores and n/p large? Try `ranger`/`xgboost` at a high
+   thread count too before assuming `fastgbm` wins.** `fastgbm`'s own
+   `threads` (explicit, or `0L` for automatic) still helps in absolute terms
+   -- parallelism pays off once a tree level's combined task count crosses
+   the internal `parallelFor()` threshold (>= 8 tasks) -- but its speedup
+   curve is flatter than either competitor's even after the level-wise
+   rewrite above (see the head-to-head), so it is not guaranteed to still be
+   the fastest option once every candidate is allowed to use all available
+   cores.
 3. **Small `n`: don't expect threading or `colsample` to matter much.**
    At `n = 1000`, fixed per-tree overhead (R/C++ call marshaling, tree-object
    allocation) is a larger share of total time, so the sweep above shows
@@ -345,7 +423,9 @@ see "Split-search optimizations" above).
    per node).
 
 See `inst/benchmarks/scaling-benchmark-np.csv`/`scaling-benchmark-threads.csv`
-for the full numbers behind both plots.
+for the full numbers behind the n/p/single-model-thread plots, and
+`inst/benchmarks/multithread-benchmark.csv` for the multi-threaded
+head-to-head.
 
 **PDP shape recovery**: since the true partial dependence of each feature is
 computable in closed form for this DGP (fixing `x_j` on a grid and averaging

@@ -1,5 +1,51 @@
 # fastgbm 0.1.0 (unreleased)
 
+## Multi-threaded scaling: level-wise (breadth-first) tree growth
+
+* Added `inst/benchmarks/run-benchmark-multithreaded.R`: a direct head-to-head
+  of `fastgbm`/`ranger`/`xgboost` at matched thread counts (`{1, 4, 12}`,
+  `gbm` shown only as a fixed single-threaded reference), at the largest
+  n/p grid point from the scaling benchmark. Finding: the single-threaded
+  win over `ranger` reported below did not survive multi-threading --
+  `ranger` (independent trees split across threads) and `xgboost`
+  (histogram build parallelized across rows and features) both scaled
+  substantially better than `fastgbm`'s prior per-node split-search
+  parallelism, to the point `fastgbm` became the slowest of the three at
+  high thread counts despite winning at `threads = 1`.
+* Root cause: the previous per-node `parallelFor()` dispatch (one call per
+  node, parallelizing across that node's own sampled features) ran out of
+  useful work several levels into a tree -- a single node's row/feature
+  count shrinks fast with depth, but the fixed cost of a `parallelFor()`
+  call does not, so deep, numerous, small nodes got little benefit from
+  more threads.
+* Fix: `build_tree()` now grows trees breadth-first, one level at a time.
+  Every node active at the current depth has its split-search tasks pooled
+  into a single combined batch (`LevelSplitFinder`, replacing the previous
+  per-node `SplitFinder`) before any of them run, so the parallelized unit
+  of work is an entire tree level, not one node -- keeping per-dispatch
+  work large even deep in the tree, since each level roughly doubles its
+  node count while roughly halving each node's row count (the total
+  per-level work stays close to constant).
+* This changes tree structure from the prior depth-first version (a
+  different, but equally valid, order of drawing each node's `colsample`
+  subset), verified rather than assumed safe: the existing leaf-value
+  correctness test and a new multi-threaded-vs-single-threaded
+  identical-tree check both pass
+  (`tests/testthat/test-tree-building.R`), plus the full pre-existing suite
+  (244 tests, unchanged pass count).
+* Net effect at `n = 20000, p = 100`: `fastgbm`'s own multi-threaded speedup
+  improved from ~1.9x/~3.3x (4/12 threads) to ~2.8x/~5.2x. This narrows,
+  but does not close, the gap to `ranger`'s ~4.6x/~9.7x and `xgboost`'s
+  ~3.2x/~6.0x -- see README's "Multi-threaded head-to-head" and "Level-wise
+  tree growth" sections.
+* A smaller first attempt -- increasing `parallelFor()`'s `grainSize` from
+  `1` to roughly one chunk per thread, on the theory that fewer/larger
+  scheduled tasks would cut scheduling overhead -- was tried, measured, and
+  found to make things *worse* (e.g. threads=4 at `n=20000, p=100`: ~1.36s
+  -> ~1.56s), then reverted. RcppParallel's own work-stealing scheduler at
+  `grainSize = 1` already balanced the per-node case better than a fixed
+  static chunking did.
+
 ## Split-search performance: child G/H inherited from the parent's split, not recomputed
 
 * Every node in `build_tree()`'s `grow()` recomputed its total
