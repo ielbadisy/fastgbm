@@ -2,7 +2,7 @@ Package: fastgbm
 Type: Package
 Title: Compact Histogram Gradient Boosting for Regression, Classification, and Survival Analysis
 Version: 0.1.0
-Authors@R: person("Imad", "El-Badisy", email = "elbadisyimad@gmail.com", role = c("aut", "cre"))
+Authors@R: person("Imad", "EL BADISY", email = "elbadisyimad@gmail.com", role = c("aut", "cre"))
 Description: A compact gradient boosting machine with a compiled (Rcpp)
     backend, covering three task types with one interface: regression
     (squared error), binary classification (logistic), and right-censored
@@ -12,6 +12,8 @@ Description: A compact gradient boosting machine with a compiled (Rcpp)
     survival-probability prediction for the survival objectives, and
     deterministic multi-threaded training via RcppParallel.
 License: MIT + file LICENSE
+URL: https://github.com/ielbadisy/fastgbm
+BugReports: https://github.com/ielbadisy/fastgbm/issues
 Encoding: UTF-8
 Depends: R (>= 4.5.0)
 Imports:
