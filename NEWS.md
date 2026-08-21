@@ -1,3 +1,14 @@
+# fastgbm 0.6.1
+
+## CRAN resubmission fixes
+
+* Single-quoted 'RcppParallel' in the DESCRIPTION `Description` field
+  (per CRAN reviewer feedback: software names must be single-quoted in
+  `Title`/`Description`).
+* Added a methods reference to `Description`: Friedman (2001)
+  <doi:10.1214/aos/1013203451>, the canonical gradient boosting machine
+  reference (per CRAN reviewer request).
+
 # fastgbm 0.6.0
 
 ## New task type: multiclass classification (`objective = "multiclass"`)

@@ -1,7 +1,7 @@
 Package: fastgbm
 Type: Package
 Title: Fast Histogram Gradient Boosting for Regression, Classification, and Survival Analysis
-Version: 0.6.0
+Version: 0.6.1
 Authors@R: person("Imad", "El Badisy", email = "elbadisyimad@gmail.com", role = c("aut", "cre"))
 Description: A fast gradient boosting machine covering four task types with
     one interface: regression (squared error), binary and multiclass
@@ -10,7 +10,8 @@ Description: A fast gradient boosting machine covering four task types with
     location-scale), or piecewise-exponential objectives. Provides
     native missing-value routing, baseline-hazard estimation and
     survival-probability prediction for the survival objectives, and
-    deterministic multi-threaded training via RcppParallel.
+    deterministic multi-threaded training via 'RcppParallel'. Methods are
+    described in Friedman (2001) <doi:10.1214/aos/1013203451>.
 License: MIT + file LICENSE
 URL: https://github.com/ielbadisy/fastgbm
 BugReports: https://github.com/ielbadisy/fastgbm/issues
