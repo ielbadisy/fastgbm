@@ -172,20 +172,36 @@ survival_cindex <- function(time, status, score) {
 #' Evaluation metric for a fitted fastgbm model
 #'
 #' Harrell's C-index for survival objectives (`"cox"`, `"aft"`, `"pexp"`),
-#' RMSE for `"regression"`, and log loss for `"binary"`.
+#' RMSE for `"regression"`, log loss for `"binary"`, and accuracy plus
+#' multiclass log loss for `"multiclass"`.
 #'
 #' @param object A fitted `fastgbm` object.
 #' @param newdata Optional new data.
 #' @param y Optional observed outcomes: a `survival::Surv` object for
-#'   survival objectives, or a numeric/logical/two-level-factor vector for
-#'   `"regression"`/`"binary"`. If omitted, returns the requested predictions
-#'   instead of a metric.
+#'   survival objectives, a numeric/logical/two-level-factor vector for
+#'   `"regression"`/`"binary"`, or a factor for `"multiclass"`. If omitted,
+#'   returns the requested predictions instead of a metric.
 #' @param type Prediction type used when `y` is omitted.
 #' @return A list with `objective`, `metric`, and `value`, or a numeric
 #'   vector of predictions if `y` is omitted.
 #' @export
 metrics <- function(object, newdata = NULL, y = NULL, type = c("response", "link")) {
   type <- match.arg(type)
+  if (inherits(object, "fastgbm_multiclass")) {
+    if (is.null(y)) {
+      return(if (is.null(newdata)) object$fitted else predict(object, newdata, type = "prob"))
+    }
+    y_factor <- factor(y, levels = object$levels)
+    if (anyNA(y_factor)) {
+      stop("`y` contains levels not present in the training response.", call. = FALSE)
+    }
+    probs <- if (is.null(newdata)) object$fitted else predict(object, newdata, type = "prob")
+    pred_class <- object$levels[max.col(probs, ties.method = "first")]
+    accuracy <- mean(pred_class == as.character(y_factor))
+    true_prob <- probs[cbind(seq_len(nrow(probs)), match(as.character(y_factor), object$levels))]
+    mlogloss <- -mean(log(pmax(true_prob, 1e-15)))
+    return(list(objective = "multiclass", metric = "accuracy/mlogloss", value = c(accuracy = accuracy, mlogloss = mlogloss)))
+  }
   if (is.null(y)) {
     if (is.null(newdata)) {
       return(if (type == "link") object$fitted_raw else object$fitted)

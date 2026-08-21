@@ -6,6 +6,15 @@
 #'   decreasing gain.
 #' @export
 importance <- function(object, ...) {
+  if (inherits(object, "fastgbm_multiclass")) {
+    per_class <- lapply(object$fits, importance)
+    combined <- Reduce(function(a, b) {
+      m <- merge(a, b, by = "feature", all = TRUE, suffixes = c("", ".y"))
+      m$gain <- rowSums(cbind(m$gain, m$gain.y), na.rm = TRUE)
+      m[, c("feature", "gain")]
+    }, per_class)
+    return(combined[order(combined$gain, decreasing = TRUE), , drop = FALSE])
+  }
   imp <- object$feature_importance
   if (is.null(imp)) {
     return(data.frame(feature = character(), gain = numeric()))

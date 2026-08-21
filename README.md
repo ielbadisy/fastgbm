@@ -1,9 +1,15 @@
 # fastgbm
 
-`fastgbm` is a compact gradient boosting engine for R, with a compiled (Rcpp +
-RcppParallel) backend, covering three task types with one interface: regression
-(squared error), binary classification (logistic), and right-censored survival
-analysis (Cox, AFT, or piecewise-exponential objectives). Survival is where the
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/ielbadisy/fastgbm/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/ielbadisy/fastgbm/actions/workflows/R-CMD-check.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<!-- badges: end -->
+
+`fastgbm` is a fast gradient boosting engine for R, with a compiled (Rcpp +
+RcppParallel) backend, covering four task types with one interface: regression
+(squared error), binary and multiclass classification (logistic and
+one-vs-rest), and right-censored survival analysis (Cox, AFT, or
+piecewise-exponential objectives). Survival is where the
 package differentiates itself from general-purpose GBM packages: `xgboost` has a
 Cox objective but no baseline-hazard/survival-curve prediction built in, and
 general-purpose GBM packages don't route missingness natively for survival-specific
@@ -13,10 +19,14 @@ survival-probability prediction at chosen horizons.
 
 ## Current scope
 
-* Three task types, one function (`fastgbm()`):
+* Four task types, one function (`fastgbm()`):
   * `objective = "regression"` - squared error;
   * `objective = "binary"` - logistic classification (0/1 response or two-level
     factor);
+  * `objective = "multiclass"` - one-vs-rest binary classification (a
+    `fastgbm` sub-model per class, sharing the same hyperparameters);
+    `predict(type = "prob")` renormalizes the K binary probabilities to sum
+    to 1, `predict(type = "class")` is their argmax;
   * `objective = "cox"` / `"aft"` / `"pexp"` - right-censored survival analysis.
     Cox uses Breslow ties, AFT a normal location-scale error, and `pexp`
     (piecewise-exponential) models the hazard jointly over covariates *and* time via
@@ -25,7 +35,8 @@ survival-probability prediction at chosen horizons.
     `vignette("survival", package = "fastgbm")`.
   * `objective` can be omitted: it is inferred from `y` (a `survival::Surv`
     response or `time`/`status` defaults to `"cox"`; a 0/1 or two-level-factor `y`
-    defaults to `"binary"`; anything else numeric defaults to `"regression"`).
+    defaults to `"binary"`; a factor/character `y` with 3+ levels defaults to
+    `"multiclass"`; anything else numeric defaults to `"regression"`).
 * matrix and formula (`y ~ .` / `Surv(time, status) ~ .`) interfaces;
 * histogram-based tree growth with native missing-value routing;
 * validation-based early stopping (`validation = list(x=, y=)` for
@@ -37,14 +48,16 @@ survival-probability prediction at chosen horizons.
 * baseline hazard estimation and survival-probability prediction at chosen horizons
   (survival objectives only);
 * feature importance, partial dependence (`pdp()`), and serialization helpers,
-  shared across all three task types.
+  shared across all four task types.
 
 ## Remaining work
 
 **New objectives** (each needs a derived gradient/Hessian, a finite-difference
 validation pass, and a documented estimand before any code is written, per this
 project's own rule against undocumented new losses):
-* Multiclass classification (softmax).
+* A native K-tree softmax multiclass objective (a single compiled kernel
+  producing all K class scores per round) as an alternative to the current
+  one-vs-rest `objective = "multiclass"` wrapper.
 * RMST-oriented loss - undesigned.
 * Royston-Parmar-style flexible spline hazard-surface objective - undesigned; harder
   than `pexp` because the spline's hazard derivative w.r.t. log-time would need finite
@@ -73,8 +86,10 @@ universal win - see `paper/fastgbm-benchmark.qmd` Roadmap for the numbers):
   model's fitted time horizon as a risk score, since there's no single scalar
   "linear predictor" the way Cox/AFT have one - correct, but coarser and slower to
   compute than the other two objectives.
-* No CRAN-readiness pass yet (vignette polish, `R CMD check --as-cran`, cross-platform
-  CI) - all development and testing so far has been local (Linux).
+* Cross-platform CI (GitHub Actions) now runs `R CMD check --as-cran` on
+  every push; win-builder/R-hub checks are still pending before an actual
+  CRAN submission, and the GitHub repository is currently private (which
+  will 404 CRAN's URL check until it's made public).
 
 ## Scientific validity
 
@@ -93,7 +108,7 @@ sign error in the AFT concordance score, and a crash in `importance()`) - see
 
 ```r
 R CMD build .
-R CMD INSTALL fastgbm_0.1.0.tar.gz
+R CMD INSTALL fastgbm_0.6.0.tar.gz
 ```
 
 ## Example
@@ -109,6 +124,11 @@ predict(fit_reg, mtcars[1:5, c("cyl", "disp", "hp", "wt")])
 fit_bin <- fastgbm(as.matrix(mtcars[, c("mpg", "disp", "hp", "wt")]), y = mtcars$am, objective = "binary")
 predict(fit_bin, mtcars[1:5, c("mpg", "disp", "hp", "wt")], type = "response")  # probabilities
 
+# multiclass classification (one-vs-rest)
+fit_multi <- fastgbm(as.matrix(iris[, 1:4]), y = iris$Species)
+predict(fit_multi, iris[1:5, 1:4], type = "prob")   # per-class probabilities
+predict(fit_multi, iris[1:5, 1:4], type = "class")  # predicted class labels
+
 # survival
 library(survival)
 lung_dat <- na.omit(lung[, c("time", "status", "age", "sex", "ph.ecog")])
@@ -120,7 +140,7 @@ fit_surv <- fastgbm(
 )
 predict(fit_surv, lung_dat[1:5, c("age", "sex", "ph.ecog")], type = "survival", times = c(90, 180, 365))
 
-# formula interface works for all three:
+# formula interface works for all four:
 fastgbm(mpg ~ cyl + disp + hp + wt, data = mtcars)
 fastgbm(Surv(time, status) ~ age + sex + ph.ecog, data = lung_dat)
 ```

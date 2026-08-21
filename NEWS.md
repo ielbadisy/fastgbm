@@ -1,4 +1,27 @@
-# fastgbm 0.1.0 (unreleased)
+# fastgbm 0.6.0
+
+## New task type: multiclass classification (`objective = "multiclass"`)
+
+* `fastgbm()` now covers a fourth task type: multiclass classification,
+  implemented as one binary (one-vs-rest) `fastgbm` sub-model per class, all
+  sharing the same hyperparameters and reusing the already-tested,
+  already-correct compiled logistic objective rather than adding a new
+  compiled kernel. `predict(type = "prob")` renormalizes the K independent
+  binary probabilities to sum to 1 per row; `predict(type = "class")` is
+  their argmax.
+* `objective` is inferred automatically: a factor/character response with 3+
+  levels defaults to `"multiclass"` (2-level factors still default to
+  `"binary"`, unchanged).
+* `metrics()` reports accuracy and multiclass log loss;
+  `importance()` combines split gain across the K sub-models.
+* Works through both the matrix and formula (`y ~ .`) interfaces, and
+  supports `validation`/`early_stopping` (applied per sub-model).
+* A native K-tree softmax boosting objective (a single compiled kernel
+  producing all K class scores per round) remains a possible future upgrade
+  over the one-vs-rest approach, but was not implemented here to avoid
+  introducing untested changes to the compiled training loop.
+
+# fastgbm 0.5.0
 
 ## Scaling benchmark extended to p = 1000
 
@@ -141,6 +164,8 @@
   and finite-difference gradient/Hessian checks (`test-parallel.R`,
   `test-gradients.R`).
 
+# fastgbm 0.4.0
+
 ## Regression and binary classification objectives added back (`objective = "regression"` / `"binary"`)
 
 * `fastgbm()` now covers three task types, not just survival: `objective =
@@ -237,6 +262,8 @@
   (see Roadmap in `paper/fastgbm-benchmark.qmd`); `pexp` was implemented
   first because it required no such approximation.
 
+# fastgbm 0.3.0
+
 ## Error-analysis diagnostics and early stopping
 
 * Added `inst/benchmarks/error-analysis/diagnose.R`: learning-curve, discordant-pair,
@@ -271,6 +298,8 @@
   `crc_mondaca2020` 0.558/0.553 to 0.568, and effectively ties `gbm` on `pbc`); the
   `ranger` gap narrowed further (`breast`: 5.9 points of C-index to 2.0) but did not
   close on any dataset.
+
+# fastgbm 0.2.0
 
 ## Renamed from fastgbm; narrowed to survival-only
 
@@ -333,6 +362,7 @@
 * Added a pure-R exact-greedy `binary:logistic` reference implementation
   (`reference_logistic_fit()`) alongside the existing squared-error one.
 
+# fastgbm 0.1.0
 
 * Initial package scaffold.
 * Added a compiled gradient boosting backend for squared-error regression and binary logistic classification.

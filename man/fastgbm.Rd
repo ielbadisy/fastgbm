@@ -48,16 +48,19 @@ formula.}
 `survival::Surv(time, status)` object, as an alternative to passing
 `time`/`status` separately. For `objective = "regression"`, a numeric
 vector. For `objective = "binary"`, a numeric/logical 0-1 vector or a
-two-level factor.}
+two-level factor. For `objective = "multiclass"`, a factor or character
+vector with 3+ levels.}
 
 \item{objective}{One of `"cox"`, `"aft"`, `"pexp"` (piecewise exponential:
 the ensemble models the log hazard rate jointly over covariates and
 time, via a person-time expansion; see [fastgbm_pexp_cutpoints()] and
 `vignette("survival", package = "fastgbm")`), `"regression"` (squared
-error), or `"binary"` (logistic classification). Defaults to `"cox"`
-when `time`/`status`/a `Surv` response is supplied, otherwise inferred
-from `y` (a two-level 0/1 response defaults to `"binary"`, anything else
-numeric to `"regression"`).}
+error), `"binary"` (logistic classification), or `"multiclass"`
+(one-vs-rest binary classification).
+Defaults to `"cox"` when `time`/`status`/a `Surv` response is supplied,
+otherwise inferred from `y` (a two-level 0/1 response defaults to
+`"binary"`, a factor/character response with 3+ levels defaults to
+`"multiclass"`, anything else numeric to `"regression"`).}
 
 \item{ntrees}{Number of boosting rounds (an upper bound when `early_stopping`
 is used). Defaults to `200`, matched to `learning_rate`/`max_depth`/
@@ -133,10 +136,12 @@ times (see [fastgbm_pexp_cutpoints()]).}
 A fitted `fastgbm` object.
 }
 \description{
-Histogram-based gradient boosting with a compiled backend, covering three
+Histogram-based gradient boosting with a compiled backend, covering four
 task types: right-censored survival analysis (Cox with Breslow ties, AFT
 with a normal location-scale error, or piecewise-exponential hazard),
-regression (squared error), and binary classification (logistic), all
-sharing the same tree-growing engine, missing-value routing, and
-early-stopping machinery.
+regression (squared error), binary classification (logistic), and
+multiclass classification (one-vs-rest binary sub-models). Survival,
+regression, and binary classification share the same compiled
+tree-growing engine, missing-value routing, and early-stopping machinery;
+multiclass is a pure-R one-vs-rest wrapper around the binary objective.
 }

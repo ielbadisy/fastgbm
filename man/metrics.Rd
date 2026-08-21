@@ -12,9 +12,9 @@ metrics(object, newdata = NULL, y = NULL, type = c("response", "link"))
 \item{newdata}{Optional new data.}
 
 \item{y}{Optional observed outcomes: a `survival::Surv` object for
-survival objectives, or a numeric/logical/two-level-factor vector for
-`"regression"`/`"binary"`. If omitted, returns the requested predictions
-instead of a metric.}
+survival objectives, a numeric/logical/two-level-factor vector for
+`"regression"`/`"binary"`, or a factor for `"multiclass"`. If omitted,
+returns the requested predictions instead of a metric.}
 
 \item{type}{Prediction type used when `y` is omitted.}
 }
@@ -24,5 +24,6 @@ A list with `objective`, `metric`, and `value`, or a numeric
 }
 \description{
 Harrell's C-index for survival objectives (`"cox"`, `"aft"`, `"pexp"`),
-RMSE for `"regression"`, and log loss for `"binary"`.
+RMSE for `"regression"`, log loss for `"binary"`, and accuracy plus
+multiclass log loss for `"multiclass"`.
 }

@@ -1,12 +1,14 @@
 #' Fit a compact gradient boosting model for survival, regression, or
 #' classification
 #'
-#' Histogram-based gradient boosting with a compiled backend, covering three
+#' Histogram-based gradient boosting with a compiled backend, covering four
 #' task types: right-censored survival analysis (Cox with Breslow ties, AFT
 #' with a normal location-scale error, or piecewise-exponential hazard),
-#' regression (squared error), and binary classification (logistic), all
-#' sharing the same tree-growing engine, missing-value routing, and
-#' early-stopping machinery.
+#' regression (squared error), binary classification (logistic), and
+#' multiclass classification (one-vs-rest binary sub-models). Survival,
+#' regression, and binary classification share the same compiled
+#' tree-growing engine, missing-value routing, and early-stopping machinery;
+#' multiclass is a pure-R one-vs-rest wrapper around the binary objective.
 #'
 #' @param x Feature matrix, data frame, or a formula (`Surv(time, status) ~ .`
 #'   for survival, `y ~ .` otherwise).
@@ -20,15 +22,18 @@
 #'   `survival::Surv(time, status)` object, as an alternative to passing
 #'   `time`/`status` separately. For `objective = "regression"`, a numeric
 #'   vector. For `objective = "binary"`, a numeric/logical 0-1 vector or a
-#'   two-level factor.
+#'   two-level factor. For `objective = "multiclass"`, a factor or character
+#'   vector with 3+ levels.
 #' @param objective One of `"cox"`, `"aft"`, `"pexp"` (piecewise exponential:
 #'   the ensemble models the log hazard rate jointly over covariates and
 #'   time, via a person-time expansion; see [fastgbm_pexp_cutpoints()] and
 #'   `vignette("survival", package = "fastgbm")`), `"regression"` (squared
-#'   error), or `"binary"` (logistic classification). Defaults to `"cox"`
-#'   when `time`/`status`/a `Surv` response is supplied, otherwise inferred
-#'   from `y` (a two-level 0/1 response defaults to `"binary"`, anything else
-#'   numeric to `"regression"`).
+#'   error), `"binary"` (logistic classification), or `"multiclass"`
+#'   (one-vs-rest binary classification).
+#'   Defaults to `"cox"` when `time`/`status`/a `Surv` response is supplied,
+#'   otherwise inferred from `y` (a two-level 0/1 response defaults to
+#'   `"binary"`, a factor/character response with 3+ levels defaults to
+#'   `"multiclass"`, anything else numeric to `"regression"`).
 #' @param ntrees Number of boosting rounds (an upper bound when `early_stopping`
 #'   is used). Defaults to `200`, matched to `learning_rate`/`max_depth`/
 #'   `min_node_size` below in the benchmark diagnostics
@@ -134,6 +139,20 @@ fastgbm <- function(x, time = NULL, status = NULL, y = NULL, objective = NULL,
   }
 
   xmat <- fastgbm_as_matrix(x)
+
+  is_multiclass_y <- (is.factor(y) || is.character(y)) && nlevels(as.factor(y)) > 2L
+  if (identical(objective, "multiclass") || (is.null(objective) && is.null(time) && is.null(status) && !inherits(y, "Surv") && is_multiclass_y)) {
+    return(fastgbm_multiclass_fit(
+      xmat, y,
+      ntrees = ntrees, learning_rate = learning_rate, max_depth = max_depth,
+      min_node_size = min_node_size, max_bins = max_bins, subsample = subsample,
+      colsample = colsample, lambda = lambda, gamma = gamma,
+      min_child_weight = min_child_weight, validation = validation,
+      early_stopping = early_stopping, threads = threads, seed = seed,
+      verbose = verbose, call = match.call()
+    ))
+  }
+
   if (is.null(objective)) {
     objective <- if (!is.null(time) || !is.null(status) || inherits(y, "Surv")) {
       "cox"
