@@ -2,7 +2,7 @@ Package: fastgbm
 Type: Package
 Title: Fast Histogram Gradient Boosting for Regression, Classification, and Survival Analysis
 Version: 0.6.0
-Authors@R: person("Imad", "EL BADISY", email = "elbadisyimad@gmail.com", role = c("aut", "cre"))
+Authors@R: person("Imad", "El Badisy", email = "elbadisyimad@gmail.com", role = c("aut", "cre"))
 Description: A fast gradient boosting machine covering four task types with
     one interface: regression (squared error), binary and multiclass
     classification (logistic and one-vs-rest), and right-censored survival
