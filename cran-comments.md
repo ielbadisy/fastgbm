@@ -2,7 +2,7 @@
 
 This is the first submission of `fastgbm` to CRAN.
 
-`fastgbm` is a compact histogram gradient boosting engine with a compiled
+`fastgbm` is a fast histogram gradient boosting engine with a compiled
 (Rcpp + RcppParallel) backend, covering regression, binary classification,
 and right-censored survival analysis (Cox, AFT, piecewise-exponential) with
 one interface.

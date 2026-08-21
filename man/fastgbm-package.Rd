@@ -9,8 +9,16 @@ A compact gradient boosting machine with a compiled (Rcpp + RcppParallel)
 backend, covering regression, binary classification, and right-censored
 survival analysis with one interface.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/ielbadisy/fastgbm}
+  \item Report bugs at \url{https://github.com/ielbadisy/fastgbm/issues}
+}
+
+}
 \author{
-\strong{Maintainer}: Imad El-Badisy \email{elbadisyimad@gmail.com}
+\strong{Maintainer}: Imad EL BADISY \email{elbadisyimad@gmail.com}
 
 }
 \keyword{internal}

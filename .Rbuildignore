@@ -1,6 +1,8 @@
-^fastgbm_.*\\.tar\\.gz$
-^\\.git$
-^\\.github$
-^TASK-Build-fastgbm\\.md$
+^fastgbm_.*\.tar\.gz$
+^\.git$
+^\.github$
+^TASK-Build-fastgbm\.md$
 ^paper$
 ^cran-comments\.md$
+^fastgbm\.Rcheck$
+^\.claude$
