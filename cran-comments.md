@@ -1,17 +1,12 @@
-## Resubmission
+## Update submission (0.6.1 -> 0.7.0)
 
-This is a resubmission addressing feedback from Uwe Ligges on the first
-submission:
-
-* Single-quoted 'RcppParallel' in the `Description` field.
-* Added a methods reference to `Description`: Friedman (2001)
-  <doi:10.1214/aos/1013203451>, the canonical gradient boosting machine
-  reference.
-
-`fastgbm` is a fast histogram gradient boosting engine with a compiled
-(Rcpp + 'RcppParallel') backend, covering regression, binary/multiclass
-classification, and right-censored survival analysis (Cox, AFT,
-piecewise-exponential) with one interface.
+This release adds competing risks to `fastgbm()` through a new `comrisk`
+argument (Fine-Gray subdistribution hazard, cause-specific hazards, and
+coupled cause-specific hazards, following 'CoxBoost'; Binder et al. 2009
+<doi:10.1093/bioinformatics/btp088>), with a new `predict()` method for
+cumulative incidence. Existing behaviour and arguments are unchanged.
+'CoxBoost' is added to Suggests and is used only in tests, behind
+`skip_if_not_installed()`.
 
 ## Test environments
 
@@ -19,9 +14,8 @@ piecewise-exponential) with one interface.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 2 notes (local `R CMD check --as-cran`):
+0 errors | 0 warnings | 1 note (local `R CMD check --as-cran`):
 
-* "New submission" -- expected for a first submission.
 * "Compilation used the following non-portable flag(s): '-mno-omit-leaf-frame-pointer'"
   -- this flag comes from the local Ubuntu R build's own `Makeconf`
   (`-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer`, a debug-build
@@ -32,4 +26,4 @@ piecewise-exponential) with one interface.
 
 ## Downstream dependencies
 
-None (new package).
+There are currently no reverse dependencies on CRAN.
