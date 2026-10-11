@@ -33,6 +33,14 @@ survival-probability prediction at chosen horizons.
     a person-time expansion (the standard Poisson trick), rather than assuming a
     fixed post-hoc baseline like Cox's Breslow estimator - see
     `vignette("survival", package = "fastgbm")`.
+  * `comrisk = "sh"` / `"csh"` / `"ccsh"` - competing risks, following the
+    three options of 'CoxBoost': Fine-Gray subdistribution hazard for one
+    `cause` (IPCW risk sets), independent cause-specific Cox boosters, or
+    coupled cause-specific boosters (one shared tree per round, leaf values
+    per cause). `predict(type = "cif")` returns cumulative incidences
+    computed as in `CoxBoost::predict(type = "CIF")`. Used automatically for
+    a `Surv(time, factor(status))` response or a `status` with 0 and two or
+    more event codes (default `"sh"`); see the competing-risks benchmark below.
   * `objective` can be omitted: it is inferred from `y` (a `survival::Surv`
     response or `time`/`status` defaults to `"cox"`; a 0/1 or two-level-factor `y`
     defaults to `"binary"`; a factor/character `y` with 3+ levels defaults to
@@ -139,6 +147,17 @@ fit_surv <- fastgbm(
   objective = "cox"
 )
 predict(fit_surv, lung_dat[1:5, c("age", "sex", "ph.ecog")], type = "survival", times = c(90, 180, 365))
+
+# competing risks (status: 0 = censored, 1 and 2 = competing causes)
+cr_dat <- transform(na.omit(lung[, c("time", "status", "age", "sex", "ph.ecog")]),
+                    cause = ifelse(status == 1, 0, ifelse(age >= 65, 2, 1)))
+fit_cr <- fastgbm(
+  as.matrix(cr_dat[, c("age", "sex", "ph.ecog")]),
+  time = cr_dat$time,
+  status = cr_dat$cause,
+  comrisk = "csh"
+)
+predict(fit_cr, cr_dat[1:5, c("age", "sex", "ph.ecog")], times = c(180, 365))  # CIF per cause
 
 # formula interface works for all four:
 fastgbm(mpg ~ cyl + disp + hp + wt, data = mtcars)
