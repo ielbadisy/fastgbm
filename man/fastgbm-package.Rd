@@ -18,7 +18,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Imad EL BADISY \email{elbadisyimad@gmail.com}
+\strong{Maintainer}: Imad El Badisy \email{elbadisyimad@gmail.com}
 
 }
 \keyword{internal}
