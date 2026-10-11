@@ -1,3 +1,27 @@
+# fastgbm 0.7.0
+
+## Competing risks (`comrisk`)
+
+* `fastgbm()` gains `comrisk = c("sh", "csh", "ccsh")`, the three competing
+  risks options of 'CoxBoost' (Binder et al. 2009), with trees in place of
+  componentwise linear updates:
+  * `"sh"`: Fine-Gray subdistribution hazard for one cause (`cause`, default
+    the first), a new compiled `"finegray"` objective with inverse
+    probability of censoring weighted risk sets (Kaplan-Meier of the
+    censoring distribution, as in 'CoxBoost').
+  * `"csh"`: one independent cause-specific Cox booster per cause.
+  * `"ccsh"`: coupled cause-specific boosters. Each round grows one shared
+    tree whose splits are ranked by Fisher's combination of the per-cause
+    score p-values, with leaf values fitted separately per cause.
+* Competing risks are triggered by `comrisk`, by a multi-state
+  `survival::Surv(time, factor(status))` response (formula interface
+  included), or by a `status` with 0 and at least two event codes. Validation
+  data and early stopping work for all three options.
+* New `predict.fastgbm_comrisk()`: `type = "cif"` returns one cumulative
+  incidence matrix per cause, computed as in `CoxBoost::predict(type =
+  "CIF")`; `"link"` and `"response"` return one column per cause.
+  `importance()` aggregates over the per-cause sub-models.
+
 # fastgbm 0.6.1
 
 ## CRAN resubmission fixes
