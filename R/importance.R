@@ -6,7 +6,7 @@
 #'   decreasing gain.
 #' @export
 importance <- function(object, ...) {
-  if (inherits(object, "fastgbm_multiclass")) {
+  if (inherits(object, c("fastgbm_multiclass", "fastgbm_comrisk"))) {
     per_class <- lapply(object$fits, importance)
     combined <- Reduce(function(a, b) {
       m <- merge(a, b, by = "feature", all = TRUE, suffixes = c("", ".y"))

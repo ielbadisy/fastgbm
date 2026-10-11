@@ -29,6 +29,8 @@ fastgbm(
   threads = 0L,
   seed = 1L,
   verbose = TRUE,
+  comrisk = NULL,
+  cause = NULL,
   ...
 )
 }
@@ -129,6 +131,22 @@ times (see [fastgbm_pexp_cutpoints()]).}
 \item{seed}{Random seed.}
 
 \item{verbose}{Whether to print progress.}
+
+\item{comrisk}{Competing-risks model, following the `cmprsk` options of
+'CoxBoost' (Binder et al. 2009): `"sh"` (Fine-Gray subdistribution
+hazard for one cause, with inverse probability of censoring weighted
+risk sets), `"csh"` (one independent cause-specific Cox booster per
+cause), or `"ccsh"` (coupled cause-specific boosters: one shared tree per
+round, splits ranked by Fisher's combination of the per-cause score
+p-values, with leaf values fitted per cause). Competing risks are used
+when `comrisk` is supplied, when `y` is a multi-state
+`survival::Surv(time, factor(status))` response, or when `status` has
+0 (censored) and at least two event codes; `comrisk` then defaults to
+`"sh"`, as in 'CoxBoost'. Returns a `fastgbm_comrisk` object, see
+[predict.fastgbm_comrisk()].}
+
+\item{cause}{For `comrisk = "sh"`, the cause of interest (a status code or
+factor level). Defaults to the first cause.}
 
 \item{...}{Additional arguments (e.g. `data` for the formula interface).}
 }

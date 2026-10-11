@@ -84,6 +84,20 @@
 #'   (`0` = automatic).
 #' @param seed Random seed.
 #' @param verbose Whether to print progress.
+#' @param comrisk Competing-risks model, following the `cmprsk` options of
+#'   'CoxBoost' (Binder et al. 2009): `"sh"` (Fine-Gray subdistribution
+#'   hazard for one cause, with inverse probability of censoring weighted
+#'   risk sets), `"csh"` (one independent cause-specific Cox booster per
+#'   cause), or `"ccsh"` (coupled cause-specific boosters: one shared tree per
+#'   round, splits ranked by Fisher's combination of the per-cause score
+#'   p-values, with leaf values fitted per cause). Competing risks are used
+#'   when `comrisk` is supplied, when `y` is a multi-state
+#'   `survival::Surv(time, factor(status))` response, or when `status` has
+#'   0 (censored) and at least two event codes; `comrisk` then defaults to
+#'   `"sh"`, as in 'CoxBoost'. Returns a `fastgbm_comrisk` object, see
+#'   [predict.fastgbm_comrisk()].
+#' @param cause For `comrisk = "sh"`, the cause of interest (a status code or
+#'   factor level). Defaults to the first cause.
 #' @param ... Additional arguments (e.g. `data` for the formula interface).
 #'
 #' @return A fitted `fastgbm` object.
@@ -107,6 +121,8 @@ fastgbm <- function(x, time = NULL, status = NULL, y = NULL, objective = NULL,
                     threads = 0L,
                     seed = 1L,
                     verbose = TRUE,
+                    comrisk = NULL,
+                    cause = NULL,
                     ...) {
   if (inherits(x, "formula")) {
     dots <- list(...)
@@ -134,11 +150,28 @@ fastgbm <- function(x, time = NULL, status = NULL, y = NULL, objective = NULL,
       grow_policy = grow_policy,
       threads = threads,
       seed = seed,
-      verbose = verbose
+      verbose = verbose,
+      comrisk = comrisk,
+      cause = cause
     ))))
   }
 
   xmat <- fastgbm_as_matrix(x)
+
+  if (fastgbm_is_comrisk(time, status, y, comrisk)) {
+    if (!is.null(objective) && !identical(objective, "cox")) {
+      stop("Competing risks are only available with `objective = \"cox\"`.", call. = FALSE)
+    }
+    return(fastgbm_comrisk_fit(
+      xmat, time, status, y, comrisk = comrisk %||% "sh", cause = cause,
+      ntrees = ntrees, learning_rate = learning_rate, max_depth = max_depth,
+      min_node_size = min_node_size, max_bins = max_bins, subsample = subsample,
+      colsample = colsample, lambda = lambda, gamma = gamma,
+      min_child_weight = min_child_weight, validation = validation,
+      early_stopping = early_stopping, threads = threads, seed = seed,
+      verbose = verbose, call = match.call()
+    ))
+  }
 
   is_multiclass_y <- (is.factor(y) || is.character(y)) && nlevels(as.factor(y)) > 2L
   if (identical(objective, "multiclass") || (is.null(objective) && is.null(time) && is.null(status) && !inherits(y, "Surv") && is_multiclass_y)) {

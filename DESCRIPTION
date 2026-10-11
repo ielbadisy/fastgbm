@@ -7,7 +7,10 @@ Description: A fast gradient boosting machine covering four task types with
     one interface: regression (squared error), binary and multiclass
     classification (logistic and one-vs-rest), and right-censored survival
     analysis via Cox (Breslow ties), accelerated failure time (normal
-    location-scale), or piecewise-exponential objectives. Provides
+    location-scale), or piecewise-exponential objectives, and competing
+    risks via Fine-Gray subdistribution hazards, cause-specific hazards, or
+    coupled cause-specific hazards, following 'CoxBoost' (Binder et al.
+    2009) <doi:10.1093/bioinformatics/btp088>. Provides
     native missing-value routing, baseline-hazard estimation and
     survival-probability prediction for the survival objectives, and
     deterministic multi-threaded training via 'RcppParallel'. Methods are
@@ -32,7 +35,8 @@ Suggests:
     pdp,
     gbm,
     xgboost,
-    ranger
+    ranger,
+    CoxBoost
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 SystemRequirements: C++17, GNU make
