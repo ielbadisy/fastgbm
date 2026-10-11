@@ -62,6 +62,57 @@ static int bin_value(double x, const std::vector<double>& cuts) {
   return static_cast<int>(it - cuts.begin()) + 1;
 }
 
+// Training-time binning: quantile cuts per feature, then every row's bin index
+// (0 = missing). Shared by fastgbm_fit_cpp and fastgbm_fit_ccsh_cpp.
+static IntegerMatrix bin_training_matrix(const NumericMatrix& x, int max_bins,
+                                         std::vector<std::vector<double>>& cuts,
+                                         std::vector<int>& max_bin_by_feature) {
+  int n = x.nrow();
+  int p = x.ncol();
+  cuts.assign(p, std::vector<double>());
+  max_bin_by_feature.assign(p, 1);
+  for (int j = 0; j < p; ++j) {
+    std::vector<double> col(n);
+    for (int i = 0; i < n; ++i) col[i] = x(i, j);
+    cuts[j] = make_cuts(col, max_bins);
+    max_bin_by_feature[j] = static_cast<int>(cuts[j].size()) + 1;
+  }
+  IntegerMatrix bins(n, p);
+  for (int j = 0; j < p; ++j) {
+    for (int i = 0; i < n; ++i) bins(i, j) = bin_value(x(i, j), cuts[j]);
+  }
+  return bins;
+}
+
+static IntegerMatrix bin_with_cuts(const NumericMatrix& x, const std::vector<std::vector<double>>& cuts) {
+  int n = x.nrow();
+  int p = x.ncol();
+  IntegerMatrix bins(n, p);
+  for (int j = 0; j < p; ++j) {
+    for (int i = 0; i < n; ++i) bins(i, j) = bin_value(x(i, j), cuts[j]);
+  }
+  return bins;
+}
+
+// A base R matrix's column names live at dimnames(x)[[2]], not a top-level
+// "colnames" attribute (that's only what the colnames() accessor computes).
+static CharacterVector matrix_feature_names(const NumericMatrix& x) {
+  int p = x.ncol();
+  CharacterVector feature_names;
+  SEXP dimnames_attr = x.attr("dimnames");
+  if (dimnames_attr != R_NilValue) {
+    List dimnames(dimnames_attr);
+    if (dimnames.size() == 2 && dimnames[1] != R_NilValue) {
+      feature_names = dimnames[1];
+    }
+  }
+  if (feature_names.size() != p) {
+    feature_names = CharacterVector(p);
+    for (int j = 0; j < p; ++j) feature_names[j] = "V" + std::to_string(j + 1);
+  }
+  return feature_names;
+}
+
 static List make_tree_list(const TreeModel& tree) {
   int n = static_cast<int>(tree.nodes.size());
   IntegerVector feature(n);
@@ -402,6 +453,291 @@ static TreeModel build_tree(const IntegerMatrix& bins, const NumericVector& grad
   return tree;
 }
 
+// ---------------------------------------------------------------------------
+// Coupled cause-specific hazards (competing risks, CoxBoost `cmprsk = "ccsh"`).
+// CoxBoost couples the K cause-specific Cox models by updating the *same*
+// covariate for every cause at each boosting step, chosen by Fisher's
+// combination of the per-cause score-test p-values,
+// -2 * sum_k log(1 - pchisq(score_k, df = 1)). The tree analog grows one shared
+// tree per round: every candidate split is scored per cause, 2 * gain_k (the
+// second-order score statistic of the split's two-group indicator, chi-square
+// with 1 df under no effect) is turned into a p-value, the p-values are
+// combined with the same Fisher statistic, and the split with the largest
+// combined statistic wins. The leaves then get one Newton value per cause, so
+// each cause keeps its own ensemble on a shared partition.
+
+// log P(chi-square_1 > 2 * gain) = log erfc(sqrt(gain)), with the asymptotic
+// expansion once erfc underflows. Thread-safe (no R API calls).
+static inline double log_chisq1_upper(double gain) {
+  double z = std::sqrt(std::max(gain, 0.0));
+  if (z < 20.0) return std::log(std::max(std::erfc(z), 1e-300));
+  return -z * z - std::log(z * std::sqrt(M_PI)) + std::log1p(-0.5 / (z * z));
+}
+
+struct MultiNodeContext {
+  const std::vector<int>* rows;
+  const double* G;  // K per-cause gradient sums
+  const double* H;  // K per-cause Hessian sums
+};
+
+struct MultiNodeSplit {
+  int feature = -1;
+  int threshold = -1;
+  bool missing_left = true;
+  double score = -INFINITY;   // Fisher combined statistic (selection)
+  double gain = -INFINITY;    // summed per-cause gain minus gamma (acceptance, importance)
+  std::vector<double> GL, HL, GR, HR;
+};
+
+// `grad`/`hess` are n x K, column-major (cause k in column k).
+struct MultiLevelSplitFinder : public Worker {
+  const RMatrix<int> bins;
+  const RMatrix<double> grad;
+  const RMatrix<double> hess;
+  int K;
+  const std::vector<int>& max_bin_by_feature;
+  double lambda, gamma, min_child_weight;
+  const std::vector<MultiNodeContext>& node_ctx;
+  const std::vector<int>& task_node;
+  const std::vector<int>& task_feature;
+  std::vector<MultiNodeSplit>& results;
+
+  MultiLevelSplitFinder(const IntegerMatrix& bins_, const NumericMatrix& grad_, const NumericMatrix& hess_,
+                        int K_, const std::vector<int>& max_bin_by_feature_,
+                        double lambda_, double gamma_, double min_child_weight_,
+                        const std::vector<MultiNodeContext>& node_ctx_,
+                        const std::vector<int>& task_node_, const std::vector<int>& task_feature_,
+                        std::vector<MultiNodeSplit>& results_)
+    : bins(bins_), grad(grad_), hess(hess_), K(K_), max_bin_by_feature(max_bin_by_feature_),
+      lambda(lambda_), gamma(gamma_), min_child_weight(min_child_weight_),
+      node_ctx(node_ctx_), task_node(task_node_), task_feature(task_feature_),
+      results(results_) {}
+
+  void operator()(std::size_t begin, std::size_t end) {
+    thread_local std::vector<double> gsum;  // (alloc_bin + 1) x K, bin-major
+    thread_local std::vector<double> hsum;
+    std::vector<double> left_g(K), left_h(K), GL(K), HL(K), GR(K), HR(K);
+
+    for (std::size_t idx = begin; idx < end; ++idx) {
+      const MultiNodeContext& ctx = node_ctx[task_node[idx]];
+      int feature = task_feature[idx];
+      int alloc_bin = max_bin_by_feature[feature];
+      MultiNodeSplit local;
+      if (alloc_bin < 2) {
+        results[idx] = local;
+        continue;
+      }
+      std::size_t width = static_cast<std::size_t>(alloc_bin + 1) * K;
+      if (gsum.size() < width) {
+        gsum.resize(width);
+        hsum.resize(width);
+      }
+      std::fill(gsum.begin(), gsum.begin() + width, 0.0);
+      std::fill(hsum.begin(), hsum.begin() + width, 0.0);
+      int actual_max_bin = 0;
+      for (int r : *ctx.rows) {
+        int b = bins(r, feature);
+        if (b < 0) b = 0;
+        if (b > alloc_bin) b = alloc_bin;
+        for (int k = 0; k < K; ++k) {
+          gsum[b * K + k] += grad(r, k);
+          hsum[b * K + k] += hess(r, k);
+        }
+        if (b > actual_max_bin) actual_max_bin = b;
+      }
+      if (actual_max_bin < 2) {
+        results[idx] = local;
+        continue;
+      }
+
+      std::fill(left_g.begin(), left_g.end(), 0.0);
+      std::fill(left_h.begin(), left_h.end(), 0.0);
+      for (int t = 1; t < actual_max_bin; ++t) {
+        double left_h_tot = 0.0, right_h_tot = 0.0;
+        for (int k = 0; k < K; ++k) {
+          left_g[k] += gsum[t * K + k];
+          left_h[k] += hsum[t * K + k];
+          left_h_tot += left_h[k];
+          right_h_tot += ctx.H[k] - left_h[k] - hsum[k];
+        }
+        if (left_h_tot < min_child_weight || right_h_tot < min_child_weight) continue;
+
+        for (int missing_side = 0; missing_side < 2; ++missing_side) {
+          double hl_tot = 0.0, hr_tot = 0.0, gain_sum = 0.0, fisher = 0.0;
+          for (int k = 0; k < K; ++k) {
+            double mg = gsum[k], mh = hsum[k];
+            GL[k] = left_g[k] + (missing_side == 0 ? mg : 0.0);
+            HL[k] = left_h[k] + (missing_side == 0 ? mh : 0.0);
+            GR[k] = ctx.G[k] - left_g[k] - mg + (missing_side == 1 ? mg : 0.0);
+            HR[k] = ctx.H[k] - left_h[k] - mh + (missing_side == 1 ? mh : 0.0);
+            hl_tot += HL[k];
+            hr_tot += HR[k];
+            double gain_k = 0.5 * (
+              (GL[k] * GL[k]) / (HL[k] + lambda) +
+              (GR[k] * GR[k]) / (HR[k] + lambda) -
+              ((GL[k] + GR[k]) * (GL[k] + GR[k])) / (HL[k] + HR[k] + lambda)
+            );
+            gain_k = std::max(gain_k, 0.0);
+            gain_sum += gain_k;
+            fisher += -2.0 * log_chisq1_upper(gain_k);
+          }
+          if (hl_tot < min_child_weight || hr_tot < min_child_weight) continue;
+          if (fisher > local.score) {
+            local.feature = feature;
+            local.threshold = t;
+            local.missing_left = (missing_side == 0);
+            local.score = fisher;
+            local.gain = gain_sum - gamma;
+            local.GL = GL; local.HL = HL; local.GR = GR; local.HR = HR;
+          }
+        }
+      }
+      results[idx] = local;
+    }
+  }
+};
+
+// Same level-wise growth, per-node colsample and thread-count-independent RNG
+// order as build_tree(); returns K trees sharing one structure, tree k carrying
+// cause k's leaf values.
+static std::vector<TreeModel> build_tree_multi(const IntegerMatrix& bins, const NumericMatrix& grad,
+                                               const NumericMatrix& hess, int K,
+                                               const std::vector<int>& rows,
+                                               int max_depth, int min_node_size, double lambda,
+                                               double gamma, double min_child_weight,
+                                               int p, double colsample, std::mt19937& rng,
+                                               std::vector<double>& importance,
+                                               int num_threads, const std::vector<int>& max_bin_by_feature) {
+  TreeModel shape;
+  shape.nodes.reserve(2 * rows.size() + 1);
+  std::vector<std::vector<double>> leaf(K);  // leaf[k][node_id]
+  std::uniform_real_distribution<double> ur(0.0, 1.0);
+
+  struct FrontierNode {
+    int node_id;
+    std::vector<int> rows;
+    std::vector<double> G, H;
+  };
+  auto set_values = [&](int node_id, const std::vector<double>& G, const std::vector<double>& H) {
+    for (int k = 0; k < K; ++k) {
+      if (static_cast<int>(leaf[k].size()) <= node_id) leaf[k].resize(node_id + 1, 0.0);
+      leaf[k][node_id] = -G[k] / (H[k] + lambda);
+    }
+  };
+
+  std::vector<double> G0(K, 0.0), H0(K, 0.0);
+  for (int r : rows) {
+    for (int k = 0; k < K; ++k) {
+      G0[k] += grad(r, k);
+      H0[k] += hess(r, k);
+    }
+  }
+  shape.nodes.push_back(TreeNode{});
+  set_values(0, G0, H0);
+
+  std::vector<FrontierNode> frontier;
+  frontier.push_back(FrontierNode{0, rows, G0, H0});
+
+  for (int depth = 0; depth < max_depth && !frontier.empty(); ++depth) {
+    std::vector<int> active_idx;
+    std::vector<std::vector<int>> active_feature_ids;
+    for (std::size_t i = 0; i < frontier.size(); ++i) {
+      const FrontierNode& fn = frontier[i];
+      double h_tot = 0.0;
+      for (int k = 0; k < K; ++k) h_tot += fn.H[k];
+      if (static_cast<int>(fn.rows.size()) < 2 * min_node_size || h_tot < min_child_weight) continue;
+      std::vector<int> feature_ids;
+      feature_ids.reserve(p);
+      for (int j = 0; j < p; ++j) {
+        if (colsample >= 1.0 || ur(rng) < colsample) feature_ids.push_back(j);
+      }
+      if (feature_ids.empty()) {
+        for (int j = 0; j < p; ++j) feature_ids.push_back(j);
+      }
+      active_idx.push_back(static_cast<int>(i));
+      active_feature_ids.push_back(std::move(feature_ids));
+    }
+    if (active_idx.empty()) break;
+
+    std::vector<MultiNodeContext> node_ctx(active_idx.size());
+    std::vector<int> task_node, task_feature;
+    for (std::size_t k = 0; k < active_idx.size(); ++k) {
+      const FrontierNode& fn = frontier[active_idx[k]];
+      node_ctx[k].rows = &fn.rows;
+      node_ctx[k].G = fn.G.data();
+      node_ctx[k].H = fn.H.data();
+      for (int f : active_feature_ids[k]) {
+        task_node.push_back(static_cast<int>(k));
+        task_feature.push_back(f);
+      }
+    }
+    int total_tasks = static_cast<int>(task_node.size());
+    std::vector<MultiNodeSplit> results(total_tasks);
+    MultiLevelSplitFinder worker(bins, grad, hess, K, max_bin_by_feature, lambda, gamma, min_child_weight,
+                                 node_ctx, task_node, task_feature, results);
+    if (num_threads != 1 && total_tasks >= 8) {
+      parallelFor(0, total_tasks, worker, /*grainSize=*/1, num_threads);
+    } else {
+      worker(0, total_tasks);
+    }
+
+    std::vector<FrontierNode> next_frontier;
+    next_frontier.reserve(2 * active_idx.size());
+    std::size_t task_cursor = 0;
+    for (std::size_t k = 0; k < active_idx.size(); ++k) {
+      FrontierNode& fn = frontier[active_idx[k]];
+      std::size_t n_tasks_k = active_feature_ids[k].size();
+      const MultiNodeSplit* best = nullptr;
+      for (std::size_t t = 0; t < n_tasks_k; ++t) {
+        const MultiNodeSplit& r = results[task_cursor + t];
+        if (r.feature >= 0 && (best == nullptr || r.score > best->score)) best = &r;
+      }
+      task_cursor += n_tasks_k;
+      if (best == nullptr || !R_finite(best->gain) || best->gain <= 0.0) continue;
+
+      std::vector<int> left_rows, right_rows;
+      left_rows.reserve(fn.rows.size());
+      right_rows.reserve(fn.rows.size());
+      for (int r : fn.rows) {
+        int b = bins(r, best->feature);
+        if (b == 0) {
+          if (best->missing_left) left_rows.push_back(r);
+          else right_rows.push_back(r);
+        } else if (b <= best->threshold) {
+          left_rows.push_back(r);
+        } else {
+          right_rows.push_back(r);
+        }
+      }
+      if (left_rows.empty() || right_rows.empty()) continue;
+
+      int left_id = static_cast<int>(shape.nodes.size());
+      shape.nodes.push_back(TreeNode{});
+      set_values(left_id, best->GL, best->HL);
+      int right_id = static_cast<int>(shape.nodes.size());
+      shape.nodes.push_back(TreeNode{});
+      set_values(right_id, best->GR, best->HR);
+
+      shape.nodes[fn.node_id].feature = best->feature;
+      shape.nodes[fn.node_id].threshold = best->threshold;
+      shape.nodes[fn.node_id].missing_left = best->missing_left;
+      shape.nodes[fn.node_id].left = left_id;
+      shape.nodes[fn.node_id].right = right_id;
+      importance[best->feature] += best->gain;
+
+      next_frontier.push_back(FrontierNode{left_id, std::move(left_rows), best->GL, best->HL});
+      next_frontier.push_back(FrontierNode{right_id, std::move(right_rows), best->GR, best->HR});
+    }
+    frontier = std::move(next_frontier);
+  }
+
+  std::vector<TreeModel> trees(K, shape);
+  for (int k = 0; k < K; ++k) {
+    for (std::size_t i = 0; i < shape.nodes.size(); ++i) trees[k].nodes[i].value = leaf[k][i];
+  }
+  return trees;
+}
+
 static double predict_tree_row(const TreeModel& tree, const IntegerMatrix& bins, int row) {
   int node = 0;
   while (true) {
@@ -633,6 +969,128 @@ static double compute_cox_loss(const NumericVector& pred, const NumericVector& t
   return loss;
 }
 
+// Fine-Gray subdistribution hazard (competing risks), with the inverse
+// probability of censoring weighted (IPCW) risk sets of CoxBoost's
+// `cmprsk = "sh"` (efron.weightmat()): `status` is 1 for the cause of interest,
+// 2 for any competing cause, 0 for censored; `ipcw` holds G(T_j), the
+// Kaplan-Meier estimate of the censoring distribution at each row's own time.
+// The risk set of an event at t keeps every row with T_j >= t at weight 1, plus
+// every competing-event row with T_j < t at weight G(t) / G(T_j). Ties use
+// Breslow, as in compute_cox_grad_hess (CoxBoost uses Efron; the two agree
+// without tied event times). With no competing events this is exactly the Cox
+// partial likelihood. The risk sums are built in one ascending pass:
+// R(t) = sum_{T_j >= t} e_j + G(t) * sum_{competing j, T_j < t} e_j / G(T_j).
+struct FineGrayBlocks {
+  std::vector<std::vector<int>> blocks;
+  std::vector<double> risk_sum, block_g;
+  std::vector<int> d;
+};
+
+static FineGrayBlocks fine_gray_blocks(const std::vector<double>& exp_pred, const NumericVector& time,
+                                       const IntegerVector& status, const NumericVector& ipcw) {
+  int n = time.size();
+  std::vector<int> order(n);
+  for (int i = 0; i < n; ++i) order[i] = i;
+  std::sort(order.begin(), order.end(), [&](int a, int b) {
+    if (time[a] == time[b]) return a < b;
+    return time[a] < time[b];
+  });
+
+  FineGrayBlocks fg;
+  for (int idx = 0; idx < n; ) {
+    double t = time[order[idx]];
+    std::vector<int> block;
+    while (idx < n && time[order[idx]] == t) {
+      block.push_back(order[idx]);
+      ++idx;
+    }
+    fg.blocks.push_back(std::move(block));
+  }
+
+  int nb = static_cast<int>(fg.blocks.size());
+  fg.risk_sum.assign(nb, 0.0);
+  fg.block_g.assign(nb, 1.0);
+  fg.d.assign(nb, 0);
+  double at_risk = 0.0;
+  for (int b = nb - 1; b >= 0; --b) {
+    for (int idx : fg.blocks[b]) at_risk += exp_pred[idx];
+    fg.risk_sum[b] = at_risk;
+  }
+  double competing = 0.0;  // sum of e_j / G(T_j) over competing rows with T_j < t_b
+  for (int b = 0; b < nb; ++b) {
+    fg.block_g[b] = ipcw[fg.blocks[b][0]];
+    for (int idx : fg.blocks[b]) {
+      if (status[idx] == 1) ++fg.d[b];
+    }
+    fg.risk_sum[b] = std::max(fg.risk_sum[b] + fg.block_g[b] * competing, 1e-12);
+    for (int idx : fg.blocks[b]) {
+      if (status[idx] == 2) competing += exp_pred[idx] / std::max(ipcw[idx], 1e-12);
+    }
+  }
+  return fg;
+}
+
+static void compute_finegray_grad_hess(const NumericVector& pred, const NumericVector& time,
+                                       const IntegerVector& status, const NumericVector& ipcw,
+                                       NumericVector& grad, NumericVector& hess) {
+  int n = pred.size();
+  std::vector<double> exp_pred(n);
+  for (int i = 0; i < n; ++i) exp_pred[i] = safe_exp(pred[i]);
+  FineGrayBlocks fg = fine_gray_blocks(exp_pred, time, status, ipcw);
+  int nb = static_cast<int>(fg.blocks.size());
+
+  // a1/a2: sums over event blocks at or before a row's own time (weight 1);
+  // b1/b2: sums over event blocks strictly after it (competing rows only,
+  // weight G(t_b) / G(T_j)).
+  std::vector<double> a1(nb), a2(nb), b1(nb), b2(nb);
+  double c1 = 0.0, c2 = 0.0;
+  for (int b = 0; b < nb; ++b) {
+    c1 += fg.d[b] / fg.risk_sum[b];
+    c2 += fg.d[b] / (fg.risk_sum[b] * fg.risk_sum[b]);
+    a1[b] = c1;
+    a2[b] = c2;
+  }
+  c1 = 0.0; c2 = 0.0;
+  for (int b = nb - 1; b >= 0; --b) {
+    b1[b] = c1;
+    b2[b] = c2;
+    c1 += fg.d[b] * fg.block_g[b] / fg.risk_sum[b];
+    c2 += fg.d[b] * fg.block_g[b] * fg.block_g[b] / (fg.risk_sum[b] * fg.risk_sum[b]);
+  }
+
+  for (int b = 0; b < nb; ++b) {
+    for (int idx : fg.blocks[b]) {
+      double e = exp_pred[idx];
+      double g = e * a1[b];
+      double h = e * a1[b] - e * e * a2[b];
+      if (status[idx] == 2) {
+        double ew = e / std::max(ipcw[idx], 1e-12);
+        g += ew * b1[b];
+        h += ew * b1[b] - ew * ew * b2[b];
+      }
+      grad[idx] = g - (status[idx] == 1 ? 1.0 : 0.0);
+      hess[idx] = std::max(1e-6, h);
+    }
+  }
+}
+
+// Negative Fine-Gray partial log-likelihood (early-stopping metric).
+static double compute_finegray_loss(const NumericVector& pred, const NumericVector& time,
+                                    const IntegerVector& status, const NumericVector& ipcw) {
+  int n = pred.size();
+  std::vector<double> exp_pred(n);
+  for (int i = 0; i < n; ++i) exp_pred[i] = safe_exp(pred[i]);
+  FineGrayBlocks fg = fine_gray_blocks(exp_pred, time, status, ipcw);
+  double loss = 0.0;
+  for (size_t b = 0; b < fg.blocks.size(); ++b) {
+    double log_denom = std::log(fg.risk_sum[b]);
+    for (int idx : fg.blocks[b]) {
+      if (status[idx] == 1) loss += -(pred[idx] - log_denom);
+    }
+  }
+  return loss;
+}
+
 // Negative AFT (normal location-scale) log-likelihood, mirroring the per-observation
 // formulas in compute_aft_grad_hess. Used as the early-stopping metric. Drops the
 // additive log(sigma) normalizing constant for events, since sigma is fixed for the
@@ -658,15 +1116,19 @@ static double compute_aft_loss(const NumericVector& pred, const NumericVector& t
 // Internal test hook: exposes the compiled gradient/Hessian formulas directly so R-level
 // tests can verify them against finite-difference references without duplicating the C++
 // math by hand. Not part of the public API.
-extern "C" SEXP fastgbm_grad_hess_cpp(SEXP predSEXP, SEXP timeSEXP, SEXP statusSEXP, SEXP objectiveSEXP) {
+extern "C" SEXP fastgbm_grad_hess_cpp(SEXP predSEXP, SEXP timeSEXP, SEXP statusSEXP, SEXP objectiveSEXP,
+                                      SEXP ipcwSEXP) {
   BEGIN_RCPP
   NumericVector pred(predSEXP);
   NumericVector time(timeSEXP);
   IntegerVector status(statusSEXP);
   std::string objective = as<std::string>(objectiveSEXP);
+  NumericVector ipcw(ipcwSEXP);
   int n = pred.size();
   NumericVector grad(n), hess(n);
-  if (objective == "aft") {
+  if (objective == "finegray") {
+    compute_finegray_grad_hess(pred, time, status, ipcw, grad, hess);
+  } else if (objective == "aft") {
     compute_aft_grad_hess(pred, time, status, grad, hess, 1.0);
   } else if (objective == "pexp") {
     compute_pexp_grad_hess(pred, time, status, grad, hess);
@@ -688,7 +1150,7 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
                                 SEXP gammaSEXP, SEXP min_child_weightSEXP, SEXP seedSEXP,
                                 SEXP threadsSEXP, SEXP verboseSEXP,
                                 SEXP x_validSEXP, SEXP time_validSEXP, SEXP status_validSEXP,
-                                SEXP early_stoppingSEXP) {
+                                SEXP early_stoppingSEXP, SEXP ipcwSEXP, SEXP ipcw_validSEXP) {
   BEGIN_RCPP
   NumericMatrix x(xSEXP);
   NumericVector time(timeSEXP);
@@ -712,6 +1174,9 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
   NumericMatrix x_valid(x_validSEXP);
   NumericVector time_valid(time_validSEXP);
   IntegerVector status_valid(status_validSEXP);
+  // Censoring weights G(T_i), used only by objective = "finegray".
+  NumericVector ipcw(ipcwSEXP);
+  NumericVector ipcw_valid(ipcw_validSEXP);
   bool has_validation = x_valid.nrow() > 0 && early_stopping > 0;
 
   // `threads <= 0` ("automatic") is passed through to parallelFor() as -1, which
@@ -725,33 +1190,14 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
     stop("`time` and `status` must match `nrow(x)`.");
   }
 
-  std::vector<std::vector<double>> cuts(p);
-  std::vector<int> max_bin_by_feature(p, 1);
-  for (int j = 0; j < p; ++j) {
-    std::vector<double> col(n);
-    for (int i = 0; i < n; ++i) col[i] = x(i, j);
-    cuts[j] = make_cuts(col, max_bins);
-    max_bin_by_feature[j] = static_cast<int>(cuts[j].size()) + 1;
-  }
-
-  IntegerMatrix bins(n, p);
-  for (int j = 0; j < p; ++j) {
-    for (int i = 0; i < n; ++i) {
-      bins(i, j) = bin_value(x(i, j), cuts[j]);
-    }
-  }
+  std::vector<std::vector<double>> cuts;
+  std::vector<int> max_bin_by_feature;
+  IntegerMatrix bins = bin_training_matrix(x, max_bins, cuts, max_bin_by_feature);
 
   // Validation set is binned with the *training* cuts (never its own), exactly like
   // prediction on new data -- it must never influence bin boundaries.
   int n_valid = has_validation ? x_valid.nrow() : 0;
-  IntegerMatrix bins_valid(std::max(n_valid, 1), p);
-  if (has_validation) {
-    for (int j = 0; j < p; ++j) {
-      for (int i = 0; i < n_valid; ++i) {
-        bins_valid(i, j) = bin_value(x_valid(i, j), cuts[j]);
-      }
-    }
-  }
+  IntegerMatrix bins_valid = has_validation ? bin_with_cuts(x_valid, cuts) : IntegerMatrix(1, p);
 
   NumericVector pred(n);
   double init_score = 0.0;
@@ -808,7 +1254,9 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
 
   for (int m = 0; m < ntrees; ++m) {
     NumericVector grad(n), hess(n);
-    if (objective == "aft") {
+    if (objective == "finegray") {
+      compute_finegray_grad_hess(pred, time, status, ipcw, grad, hess);
+    } else if (objective == "aft") {
       compute_aft_grad_hess(pred, time, status, grad, hess, 1.0);
     } else if (objective == "pexp") {
       compute_pexp_grad_hess(pred, time, status, grad, hess);
@@ -839,7 +1287,9 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
         pred_valid[i] += learning_rate * predict_tree_row(tree, bins_valid, i);
       }
       double val_loss;
-      if (objective == "aft") {
+      if (objective == "finegray") {
+        val_loss = compute_finegray_loss(pred_valid, time_valid, status_valid, ipcw_valid);
+      } else if (objective == "aft") {
         val_loss = compute_aft_loss(pred_valid, time_valid, status_valid, 1.0);
       } else if (objective == "pexp") {
         val_loss = compute_pexp_loss(pred_valid, time_valid, status_valid);
@@ -877,20 +1327,7 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
     tree_list[i] = make_tree_list(trees[i]);
   }
 
-  // A base R matrix's column names live at dimnames(x)[[2]], not a top-level
-  // "colnames" attribute (that's only what the colnames() accessor computes).
-  CharacterVector feature_names;
-  SEXP dimnames_attr = x.attr("dimnames");
-  if (dimnames_attr != R_NilValue) {
-    List dimnames(dimnames_attr);
-    if (dimnames.size() == 2 && dimnames[1] != R_NilValue) {
-      feature_names = dimnames[1];
-    }
-  }
-  if (feature_names.size() != p) {
-    feature_names = CharacterVector(p);
-    for (int j = 0; j < p; ++j) feature_names[j] = "V" + std::to_string(j + 1);
-  }
+  CharacterVector feature_names = matrix_feature_names(x);
 
   NumericVector importance_vec(p);
   for (int j = 0; j < p; ++j) importance_vec[j] = importance[j];
@@ -909,6 +1346,168 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
     _["max_bins"] = max_bins,
     _["survival_sigma"] = 1.0,
     _["best_iteration"] = has_validation ? best_iteration : static_cast<int>(trees.size()),
+    _["validation_history"] = wrap(validation_history),
+    _["stopping_reason"] = stopping_reason
+  );
+  END_RCPP
+}
+
+// Coupled cause-specific Cox boosting (comrisk = "ccsh"): `status` holds cause
+// codes 1..K (0 = censored); cause k's Cox gradient treats every other cause as
+// censored, exactly as CoxBoost's cause-specific models do. One shared tree per
+// round (build_tree_multi), K ensembles. Early stopping monitors the summed
+// cause-specific negative partial log-likelihoods. Returns one model list per
+// cause in the same layout as fastgbm_fit_cpp, so prediction reuses
+// fastgbm_predict_cpp unchanged.
+extern "C" SEXP fastgbm_fit_ccsh_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP, SEXP ncauseSEXP,
+                                     SEXP ntreesSEXP, SEXP learning_rateSEXP,
+                                     SEXP max_depthSEXP, SEXP min_node_sizeSEXP, SEXP max_binsSEXP,
+                                     SEXP subsampleSEXP, SEXP colsampleSEXP, SEXP lambdaSEXP,
+                                     SEXP gammaSEXP, SEXP min_child_weightSEXP, SEXP seedSEXP,
+                                     SEXP threadsSEXP, SEXP verboseSEXP,
+                                     SEXP x_validSEXP, SEXP time_validSEXP, SEXP status_validSEXP,
+                                     SEXP early_stoppingSEXP) {
+  BEGIN_RCPP
+  NumericMatrix x(xSEXP);
+  NumericVector time(timeSEXP);
+  IntegerVector status(statusSEXP);
+  int K = as<int>(ncauseSEXP);
+  int ntrees = as<int>(ntreesSEXP);
+  double learning_rate = as<double>(learning_rateSEXP);
+  int max_depth = as<int>(max_depthSEXP);
+  int min_node_size = as<int>(min_node_sizeSEXP);
+  int max_bins = as<int>(max_binsSEXP);
+  double subsample = as<double>(subsampleSEXP);
+  double colsample = as<double>(colsampleSEXP);
+  double lambda = as<double>(lambdaSEXP);
+  double gamma = as<double>(gammaSEXP);
+  double min_child_weight = as<double>(min_child_weightSEXP);
+  int seed = as<int>(seedSEXP);
+  int threads = as<int>(threadsSEXP);
+  bool verbose = as<bool>(verboseSEXP);
+  int early_stopping = as<int>(early_stoppingSEXP);
+  NumericMatrix x_valid(x_validSEXP);
+  NumericVector time_valid(time_validSEXP);
+  IntegerVector status_valid(status_validSEXP);
+  bool has_validation = x_valid.nrow() > 0 && early_stopping > 0;
+  int num_threads = threads > 0 ? threads : -1;
+
+  int n = x.nrow();
+  int p = x.ncol();
+  if (time.size() != n || status.size() != n) {
+    stop("`time` and `status` must match `nrow(x)`.");
+  }
+  if (K < 2) stop("`ccsh` needs at least two causes.");
+
+  std::vector<std::vector<double>> cuts;
+  std::vector<int> max_bin_by_feature;
+  IntegerMatrix bins = bin_training_matrix(x, max_bins, cuts, max_bin_by_feature);
+  int n_valid = has_validation ? x_valid.nrow() : 0;
+  IntegerMatrix bins_valid = has_validation ? bin_with_cuts(x_valid, cuts) : IntegerMatrix(1, p);
+
+  std::vector<IntegerVector> status_k(K), status_valid_k(K);
+  std::vector<NumericVector> pred_k(K), pred_valid_k(K);
+  for (int k = 0; k < K; ++k) {
+    status_k[k] = IntegerVector(n);
+    for (int i = 0; i < n; ++i) status_k[k][i] = status[i] == k + 1 ? 1 : 0;
+    pred_k[k] = NumericVector(n, 0.0);
+    status_valid_k[k] = IntegerVector(std::max(n_valid, 1));
+    for (int i = 0; i < n_valid; ++i) status_valid_k[k][i] = status_valid[i] == k + 1 ? 1 : 0;
+    pred_valid_k[k] = NumericVector(std::max(n_valid, 1), 0.0);
+  }
+
+  std::mt19937 rng(seed);
+  std::uniform_real_distribution<double> ur(0.0, 1.0);
+  std::vector<std::vector<TreeModel>> trees(K);
+  std::vector<double> importance(p, 0.0);
+  std::vector<double> validation_history;
+  int best_iteration = 0;
+  double best_val_loss = R_PosInf;
+  int rounds_since_improvement = 0;
+  std::string stopping_reason = has_validation ? "max_ntrees" : "disabled";
+  int grown = 0;
+
+  NumericMatrix grad(n, K), hess(n, K);
+  NumericVector g_k(n), h_k(n);
+  for (int m = 0; m < ntrees; ++m) {
+    for (int k = 0; k < K; ++k) {
+      compute_cox_grad_hess(pred_k[k], time, status_k[k], g_k, h_k);
+      for (int i = 0; i < n; ++i) {
+        grad(i, k) = g_k[i];
+        hess(i, k) = h_k[i];
+      }
+    }
+
+    std::vector<int> rows;
+    rows.reserve(n);
+    for (int i = 0; i < n; ++i) {
+      if (subsample >= 1.0 || ur(rng) < subsample) rows.push_back(i);
+    }
+    if (rows.empty()) {
+      for (int i = 0; i < n; ++i) rows.push_back(i);
+    }
+
+    std::vector<TreeModel> round = build_tree_multi(bins, grad, hess, K, rows, max_depth, min_node_size,
+                                                    lambda, gamma, min_child_weight, p, colsample, rng,
+                                                    importance, num_threads, max_bin_by_feature);
+    double val_loss = 0.0;
+    for (int k = 0; k < K; ++k) {
+      for (int i = 0; i < n; ++i) pred_k[k][i] += learning_rate * predict_tree_row(round[k], bins, i);
+      if (has_validation) {
+        for (int i = 0; i < n_valid; ++i) {
+          pred_valid_k[k][i] += learning_rate * predict_tree_row(round[k], bins_valid, i);
+        }
+        val_loss += compute_cox_loss(pred_valid_k[k], time_valid, status_valid_k[k]);
+      }
+      trees[k].push_back(std::move(round[k]));
+    }
+    ++grown;
+
+    if (has_validation) {
+      validation_history.push_back(val_loss);
+      if (val_loss < best_val_loss) {
+        best_val_loss = val_loss;
+        best_iteration = m + 1;
+        rounds_since_improvement = 0;
+      } else {
+        ++rounds_since_improvement;
+      }
+    }
+    if (verbose && ((m + 1) % 50 == 0 || m + 1 == ntrees)) {
+      Rcout << "trained tree " << (m + 1) << "/" << ntrees << "\n";
+    }
+    if (has_validation && rounds_since_improvement >= early_stopping) {
+      stopping_reason = "early_stopping";
+      break;
+    }
+  }
+
+  CharacterVector feature_names = matrix_feature_names(x);
+  NumericVector importance_vec(p);
+  for (int j = 0; j < p; ++j) importance_vec[j] = importance[j];
+
+  List fits(K);
+  for (int k = 0; k < K; ++k) {
+    List tree_list(trees[k].size());
+    for (size_t t = 0; t < trees[k].size(); ++t) tree_list[t] = make_tree_list(trees[k][t]);
+    fits[k] = List::create(
+      _["objective"] = "cox",
+      _["init_score"] = 0.0,
+      _["trees"] = tree_list,
+      _["feature_names"] = feature_names,
+      _["feature_importance"] = importance_vec,
+      _["cuts"] = cuts,
+      _["max_bin_by_feature"] = max_bin_by_feature,
+      _["learning_rate"] = learning_rate,
+      _["max_depth"] = max_depth,
+      _["min_node_size"] = min_node_size,
+      _["max_bins"] = max_bins
+    );
+  }
+  return List::create(
+    _["fits"] = fits,
+    _["feature_importance"] = importance_vec,
+    _["best_iteration"] = has_validation ? best_iteration : grown,
     _["validation_history"] = wrap(validation_history),
     _["stopping_reason"] = stopping_reason
   );

@@ -9,16 +9,26 @@ SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
                      SEXP gammaSEXP, SEXP min_child_weightSEXP, SEXP seedSEXP,
                      SEXP threadsSEXP, SEXP verboseSEXP,
                      SEXP x_validSEXP, SEXP time_validSEXP, SEXP status_validSEXP,
-                     SEXP early_stoppingSEXP);
+                     SEXP early_stoppingSEXP, SEXP ipcwSEXP, SEXP ipcw_validSEXP);
+SEXP fastgbm_fit_ccsh_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP, SEXP ncauseSEXP,
+                          SEXP ntreesSEXP, SEXP learning_rateSEXP,
+                          SEXP max_depthSEXP, SEXP min_node_sizeSEXP, SEXP max_binsSEXP,
+                          SEXP subsampleSEXP, SEXP colsampleSEXP, SEXP lambdaSEXP,
+                          SEXP gammaSEXP, SEXP min_child_weightSEXP, SEXP seedSEXP,
+                          SEXP threadsSEXP, SEXP verboseSEXP,
+                          SEXP x_validSEXP, SEXP time_validSEXP, SEXP status_validSEXP,
+                          SEXP early_stoppingSEXP);
 SEXP fastgbm_predict_cpp(SEXP modelSEXP, SEXP xSEXP, SEXP typeSEXP);
 SEXP fastgbm_importance_cpp(SEXP modelSEXP);
-SEXP fastgbm_grad_hess_cpp(SEXP predSEXP, SEXP timeSEXP, SEXP statusSEXP, SEXP objectiveSEXP);
+SEXP fastgbm_grad_hess_cpp(SEXP predSEXP, SEXP timeSEXP, SEXP statusSEXP, SEXP objectiveSEXP,
+                           SEXP ipcwSEXP);
 
 static const R_CallMethodDef CallEntries[] = {
-    {"fastgbm_fit_cpp", (DL_FUNC) &fastgbm_fit_cpp, 21},
+    {"fastgbm_fit_cpp", (DL_FUNC) &fastgbm_fit_cpp, 23},
+    {"fastgbm_fit_ccsh_cpp", (DL_FUNC) &fastgbm_fit_ccsh_cpp, 21},
     {"fastgbm_predict_cpp", (DL_FUNC) &fastgbm_predict_cpp, 3},
     {"fastgbm_importance_cpp", (DL_FUNC) &fastgbm_importance_cpp, 1},
-    {"fastgbm_grad_hess_cpp", (DL_FUNC) &fastgbm_grad_hess_cpp, 4},
+    {"fastgbm_grad_hess_cpp", (DL_FUNC) &fastgbm_grad_hess_cpp, 5},
     {NULL, NULL, 0}
 };
 

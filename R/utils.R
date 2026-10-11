@@ -18,12 +18,13 @@ fastgbm_model_fields <- function(object) {
 }
 
 # Internal-only: exposes the compiled gradient/Hessian kernels for testing.
-fastgbm_grad_hess <- function(pred, time, status, objective) {
+fastgbm_grad_hess <- function(pred, time, status, objective, ipcw = numeric(0)) {
   .Call(
     "fastgbm_grad_hess_cpp",
     as.numeric(pred),
     as.numeric(time),
     as.integer(status),
-    as.character(objective)
+    as.character(objective),
+    as.numeric(ipcw)
   )
 }

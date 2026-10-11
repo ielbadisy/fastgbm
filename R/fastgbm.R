@@ -270,7 +270,9 @@ fastgbm <- function(x, time = NULL, status = NULL, y = NULL, objective = NULL,
     x_valid_mat,
     as.numeric(time_valid),
     as.integer(status_valid),
-    early_stopping_int
+    early_stopping_int,
+    numeric(0),
+    numeric(0)
   )
   fit$call <- match.call()
   fit$objective <- objective
