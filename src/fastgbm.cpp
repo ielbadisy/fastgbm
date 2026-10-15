@@ -46,11 +46,13 @@ static std::vector<double> make_cuts(const std::vector<double>& values, int max_
   int cut_count = std::max(0, bins - 1);
   std::vector<double> cuts;
   cuts.reserve(cut_count);
+  // Cut midway between consecutive unique values so that each of the `bins`
+  // groups of unique values gets its own bin (a 0/1 feature cuts at 0.5).
   for (int j = 1; j <= cut_count; ++j) {
-    double pos = (static_cast<double>(j) * (v.size() - 1)) / bins;
-    size_t idx = static_cast<size_t>(std::floor(pos));
+    size_t idx = static_cast<size_t>((static_cast<double>(j) * v.size()) / bins);
+    if (idx < 1) idx = 1;
     if (idx >= v.size()) idx = v.size() - 1;
-    cuts.push_back(v[idx]);
+    cuts.push_back(0.5 * (v[idx - 1] + v[idx]));
   }
   cuts.erase(std::unique(cuts.begin(), cuts.end()), cuts.end());
   return cuts;

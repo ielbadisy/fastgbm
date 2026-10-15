@@ -22,6 +22,14 @@
   "CIF")`; `"link"` and `"response"` return one column per cause.
   `importance()` aggregates over the per-cause sub-models.
 
+## Bug fixes
+
+* Histogram bin cuts are now placed midway between consecutive unique
+  values, so each group of unique values gets its own bin (a 0/1 feature is
+  cut at 0.5). Previously a cut could equal an observed value and merge
+  adjacent groups. Fitted models can differ slightly from earlier 0.7.0
+  builds.
+
 # fastgbm 0.6.1
 
 ## CRAN resubmission fixes
