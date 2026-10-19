@@ -1,5 +1,11 @@
 # fastgbm 0.7.0
 
+## Installation
+
+* The minimum R version is lowered from 4.5.0 to 4.1.0. Nothing in the
+  package needs R 4.5, and the old floor blocked installation (and the
+  installation of packages that import 'fastgbm') on R 4.4 and earlier.
+
 ## Competing risks (`comrisk`)
 
 * `fastgbm()` gains `comrisk = c("sh", "csh", "ccsh")`, the three competing

@@ -19,7 +19,7 @@ License: MIT + file LICENSE
 URL: https://github.com/ielbadisy/fastgbm
 BugReports: https://github.com/ielbadisy/fastgbm/issues
 Encoding: UTF-8
-Depends: R (>= 4.5.0)
+Depends: R (>= 4.1.0)
 Imports:
     stats,
     utils,
