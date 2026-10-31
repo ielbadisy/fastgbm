@@ -5,8 +5,12 @@ argument (Fine-Gray subdistribution hazard, cause-specific hazards, and
 coupled cause-specific hazards, following 'CoxBoost'; Binder et al. 2009
 <doi:10.1093/bioinformatics/btp088>), with a new `predict()` method for
 cumulative incidence. Existing behaviour and arguments are unchanged.
-'CoxBoost' is added to Suggests and is used only in tests, behind
+'CoxBoost' (>= 1.5.2) is added to Suggests and is used only in tests, behind
 `skip_if_not_installed()`.
+
+The minimum R version is lowered from 4.5.0 to 4.1.0: nothing in the package
+needs R 4.5, and the old floor blocked installation of 'fastgbm' and of the
+packages that import it on R 4.4 and earlier.
 
 ## Test environments
 
