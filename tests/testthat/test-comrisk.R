@@ -62,7 +62,8 @@ test_that("Fine-Gray reduces to Cox when there are no competing events", {
 })
 
 test_that("cumulative incidence matches CoxBoost's predict(type = \"CIF\")", {
-  skip_if_not_installed("CoxBoost")
+  # CoxBoost 1.5.2 changed its cause-specific CIF estimator; fastgbm follows it.
+  skip_if_not_installed("CoxBoost", "1.5.2")
   set.seed(5)
   n <- 80
   x <- matrix(rnorm(n * 2), n)
@@ -119,6 +120,26 @@ test_that("comrisk = \"csh\" equals separate cause-specific Cox fits", {
                    ntrees = 20, max_depth = 2, seed = 3L + k - 1L, verbose = FALSE)
     expect_equal(unname(predict(fit, d$x, type = "link")[, k]),
                  unname(predict(cox, d$x, type = "link")))
+  }
+})
+
+test_that("cause-specific incidences are non-decreasing and add up to 1 - S(t)", {
+  d <- comrisk_data()
+  tt <- sort(unique(c(0, quantile(d$time, seq(0.05, 0.95, by = 0.05)))))
+  for (cr in c("csh", "ccsh")) {
+    fit <- fastgbm(d$x, time = d$time, status = d$status, comrisk = cr,
+                   ntrees = 30, max_depth = 3, seed = 2L, verbose = FALSE)
+    cif <- predict(fit, d$x[1:20, ], times = tt)
+    for (m in cif) {
+      expect_true(all(m >= 0 & m <= 1))
+      expect_true(all(apply(m, 1, diff) >= -1e-12))
+    }
+    lp <- predict(fit, d$x[1:20, ], type = "link")
+    H <- Reduce(`+`, lapply(seq_along(fit$fits), function(k) {
+      b <- fit$fits[[k]]$baseline
+      outer(exp(lp[, k]), fastgbm:::fastgbm_eval_step(list(times = b$times, surv = b$cumhaz), tt, at_zero = 0))
+    }))
+    expect_equal(unname(Reduce(`+`, cif)), unname(1 - exp(-H)), tolerance = 1e-10)
   }
 })
 

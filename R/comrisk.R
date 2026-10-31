@@ -281,47 +281,44 @@ fastgbm_ccsh_fit <- function(xmat, time, status, K, hyper, validation, resp_vali
   })
 }
 
-# Cause-specific cumulative incidence, as in CoxBoost's predict(type = "CIF"):
-# the all-cause survival exp(-sum_k H_k) on the grid of all event times, each
-# cause's hazard spread uniformly between its own event times, integrated
-# against the interval-midpoint all-cause survival, then rescaled so that the
-# incidences add up to 1 - S(t).
+# Cause-specific cumulative incidence, as in CoxBoost's predict(type = "CIF")
+# (CoxBoost >= 1.5.2). At each event time u, the all-cause event probability
+# S(u-) * (1 - exp(-dH(u))), with dH = sum_k dH_k, is split between causes in
+# proportion to their hazard jumps dH_k(u). The incidences are non-decreasing,
+# add up to 1 - exp(-sum_k H_k(t)), and are constant between event times.
 #' @noRd
 fastgbm_cif_cause_specific <- function(lp, baselines, times) {
   n <- nrow(lp)
   K <- ncol(lp)
-  grid <- sort(unique(unlist(lapply(baselines, `[[`, "times"))))
-  if (!length(grid) || grid[1] > 0) grid <- c(0, grid)
-  if (max(grid) < max(times)) {
-    grid <- c(grid, max(times))
-  } else {
-    grid <- grid[grid <= max(times)]
-  }
-  if (length(grid) < 2L) {
+  et <- sort(unique(unlist(lapply(baselines, `[[`, "times"))))
+  et <- et[et <= max(c(times, -Inf))]
+  if (!length(et)) {
     return(rep(list(matrix(0, n, length(times))), K))
   }
-  cumhaz_at <- function(k, t) {
-    outer(exp(pmin(lp[, k], 35)), fastgbm_eval_step(list(times = baselines[[k]]$times, surv = baselines[[k]]$cumhaz), t, at_zero = 0))
-  }
-  all_surv <- exp(-Reduce(`+`, lapply(seq_len(K), cumhaz_at, t = grid)))
-  mid_surv <- (all_surv[, -ncol(all_surv), drop = FALSE] + all_surv[, -1, drop = FALSE]) / 2
-  dgrid <- diff(grid)
-  cif <- lapply(seq_len(K), function(k) {
-    et <- baselines[[k]]$times
-    if (!length(et)) return(matrix(0, n, length(grid)))
-    if (et[1] != 0) et <- c(0, et)
-    H <- cumhaz_at(k, et)
-    haz <- cbind((H[, -1, drop = FALSE] - H[, -ncol(H), drop = FALSE]) /
-                   rep(diff(et), each = n), 0)
-    idx <- findInterval(grid[-length(grid)], et)
-    inc <- haz[, idx, drop = FALSE] * rep(dgrid, each = n) * mid_surv
-    cbind(0, t(apply(inc, 1, cumsum)))
+  # n x length(et) hazard jumps per cause
+  jumps <- lapply(seq_len(K), function(k) {
+    H0 <- fastgbm_eval_step(list(times = baselines[[k]]$times, surv = baselines[[k]]$cumhaz),
+                            et, at_zero = 0)
+    outer(exp(pmin(lp[, k], 35)), diff(c(0, H0)))
   })
-  total <- Reduce(`+`, cif)
-  scale <- ifelse(total > 0, (1 - all_surv) / total, 0)
-  scale[, 1] <- 0
-  at <- findInterval(times, grid)
-  lapply(cif, function(m) (m * scale)[, at, drop = FALSE])
+  total <- Reduce(`+`, jumps)
+  cif <- rep(list(matrix(0, n, length(et))), K)
+  cum <- numeric(n)
+  prev <- rep(list(numeric(n)), K)
+  for (j in seq_along(et)) {
+    dH <- total[, j]
+    prob <- exp(-cum) * -expm1(-dH)
+    pos <- dH > 0
+    for (k in seq_len(K)) {
+      inc <- numeric(n)
+      inc[pos] <- prob[pos] * jumps[[k]][pos, j] / dH[pos]
+      prev[[k]] <- prev[[k]] + inc
+      cif[[k]][, j] <- prev[[k]]
+    }
+    cum <- cum + dH
+  }
+  at <- findInterval(times, et) + 1L
+  lapply(cif, function(m) cbind(0, m)[, at, drop = FALSE])
 }
 
 #' Predict from a fitted competing-risks fastgbm model
