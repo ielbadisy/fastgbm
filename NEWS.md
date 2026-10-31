@@ -25,7 +25,11 @@
   data and early stopping work for all three options.
 * New `predict.fastgbm_comrisk()`: `type = "cif"` returns one cumulative
   incidence matrix per cause, computed as in `CoxBoost::predict(type =
-  "CIF")`; `"link"` and `"response"` return one column per cause.
+  "CIF")` from 'CoxBoost' 1.5.2 on; `"link"` and `"response"` return one
+  column per cause. For `"csh"` and `"ccsh"`, at each event time the
+  all-cause event probability is split between causes in proportion to their
+  hazard jumps, so each incidence is non-decreasing, constant between event
+  times, and the incidences add up to one minus the all-cause survival.
   `importance()` aggregates over the per-cause sub-models.
 
 ## Bug fixes
@@ -35,6 +39,11 @@
   cut at 0.5). Previously a cut could equal an observed value and merge
   adjacent groups. Fitted models can differ slightly from earlier 0.7.0
   builds.
+* Cause-specific cumulative incidence (`comrisk = "csh"`/`"ccsh"`) follows
+  the estimator of 'CoxBoost' 1.5.2 (accumulated event-time increments). It
+  used the earlier one (hazards interpolated between event times, then
+  rescaled), which no longer matched `CoxBoost::predict(type = "CIF")`.
+  'CoxBoost' (>= 1.5.2) in Suggests.
 
 # fastgbm 0.6.1
 
