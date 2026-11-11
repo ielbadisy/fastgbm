@@ -1,3 +1,12 @@
+## Resubmission
+
+This is a resubmission of 0.7.1. The incoming pretest on Debian gave a NOTE:
+"Running R code in 'testthat.R' had CPU time 4.4 times elapsed time". The
+tests now limit RcppParallel to 2 threads (`tests/testthat.R`) and the
+thread-determinism tests compare 1 against 2 threads instead of 4. Locally,
+with `_R_CHECK_TEST_TIMING_CPU_TO_ELAPSED_THRESHOLD_=2.5`, the ratio is 1.1
+and the NOTE no longer appears. The package code is unchanged.
+
 ## Update submission (0.7.0 -> 0.7.1): bug fix
 
 This is an early update, 0.7.0 having been published on 2026-11-03. It fixes
