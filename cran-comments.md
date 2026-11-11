@@ -1,16 +1,14 @@
-## Update submission (0.6.1 -> 0.7.0)
+## Update submission (0.7.0 -> 0.7.1): bug fix
 
-This release adds competing risks to `fastgbm()` through a new `comrisk`
-argument (Fine-Gray subdistribution hazard, cause-specific hazards, and
-coupled cause-specific hazards, following 'CoxBoost'; Binder et al. 2009
-<doi:10.1093/bioinformatics/btp088>), with a new `predict()` method for
-cumulative incidence. Existing behaviour and arguments are unchanged.
-'CoxBoost' (>= 1.5.2) is added to Suggests and is used only in tests, behind
-`skip_if_not_installed()`.
-
-The minimum R version is lowered from 4.5.0 to 4.1.0: nothing in the package
-needs R 4.5, and the old floor blocked installation of 'fastgbm' and of the
-packages that import it on R 4.4 and earlier.
+This is an early update, 0.7.0 having been published on 2026-11-03. It fixes
+a bug that makes the predictions of `objective = "pexp"` wrong: the time
+feature used in training was the midpoint of the time each subject spent in
+an interval, whereas prediction uses the midpoint of the whole interval. With
+many trees the predicted hazard shrank towards zero and survival curves were
+far too high (mean 5-year survival 0.93 against a Kaplan-Meier estimate of
+0.44 on the Rotterdam breast cancer data). Users of 0.7.0 get miscalibrated
+survival probabilities, so we would like to replace it now rather than wait.
+No other change; the API is unchanged.
 
 ## Test environments
 
@@ -18,7 +16,11 @@ packages that import it on R 4.4 and earlier.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 1 note (local `R CMD check --as-cran`):
+0 errors | 0 warnings | 2 notes (local `R CMD check --as-cran`):
+
+* "checking for future file timestamps ... unable to verify current time"
+  -- the local machine could not reach the time server; unrelated to the
+  package.
 
 * "Compilation used the following non-portable flag(s): '-mno-omit-leaf-frame-pointer'"
   -- this flag comes from the local Ubuntu R build's own `Makeconf`
@@ -30,4 +32,5 @@ packages that import it on R 4.4 and earlier.
 
 ## Downstream dependencies
 
-There are currently no reverse dependencies on CRAN.
+There are 2 reverse dependencies on CRAN (funcml, mimar). Both were checked
+against 0.7.1 with `R CMD check`: no new problems.
