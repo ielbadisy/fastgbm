@@ -1,3 +1,16 @@
+# fastgbm 0.7.1
+
+## Bug fixes
+
+* `objective = "pexp"`: the time feature of the person-time expansion is now
+  the midpoint of the whole interval, as used at prediction, instead of the
+  midpoint of the time each subject spent in it. The old feature identified
+  the subjects who survived each interval, so with many trees the predicted
+  hazard at prediction time shrank towards zero and survival curves were far
+  too high (mean 5-year survival 0.93 against a Kaplan-Meier estimate of 0.44
+  on the Rotterdam breast cancer data with 200 trees). Discrimination was
+  largely unaffected; calibration and the Brier score were not.
+
 # fastgbm 0.7.0
 
 ## Installation
