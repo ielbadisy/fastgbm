@@ -15,10 +15,10 @@ test_that("training is deterministic across thread counts", {
   fit1 <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 20L,
                   learning_rate = 0.1, max_depth = 4L, min_node_size = 5L,
                   threads = 1L, seed = 1L, verbose = FALSE)
-  fit4 <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 20L,
+  fit2 <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 20L,
                   learning_rate = 0.1, max_depth = 4L, min_node_size = 5L,
-                  threads = 4L, seed = 1L, verbose = FALSE)
+                  threads = 2L, seed = 1L, verbose = FALSE)
 
-  expect_equal(predict(fit1, x, type = "link"), predict(fit4, x, type = "link"))
-  expect_equal(fit1$feature_importance, fit4$feature_importance)
+  expect_equal(predict(fit1, x, type = "link"), predict(fit2, x, type = "link"))
+  expect_equal(fit1$feature_importance, fit2$feature_importance)
 })

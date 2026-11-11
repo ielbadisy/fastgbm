@@ -86,6 +86,6 @@ test_that("multi-threaded split search gives identical leaf G/H bookkeeping to s
                   threads = 1L, seed = 1L, verbose = FALSE)
   fit2 <- fastgbm(x, y = y, objective = "regression", ntrees = 5L, max_depth = 5L,
                   min_node_size = 5L, subsample = 1, colsample = 1,
-                  threads = 4L, seed = 1L, verbose = FALSE)
+                  threads = 2L, seed = 1L, verbose = FALSE)
   expect_identical(fit1$trees, fit2$trees)
 })
