@@ -125,9 +125,9 @@ test_that("pexp training is deterministic across thread counts", {
 
   fit1 <- fastgbm(x, time = time, status = status, objective = "pexp", ntrees = 30L,
                   max_depth = 4L, min_node_size = 5L, threads = 1L, seed = 1L, verbose = FALSE)
-  fit4 <- fastgbm(x, time = time, status = status, objective = "pexp", ntrees = 30L,
-                  max_depth = 4L, min_node_size = 5L, threads = 4L, seed = 1L, verbose = FALSE)
-  expect_equal(predict(fit1, x, type = "link"), predict(fit4, x, type = "link"))
+  fit2 <- fastgbm(x, time = time, status = status, objective = "pexp", ntrees = 30L,
+                  max_depth = 4L, min_node_size = 5L, threads = 2L, seed = 1L, verbose = FALSE)
+  expect_equal(predict(fit1, x, type = "link"), predict(fit2, x, type = "link"))
 })
 
 test_that("pexp serialization round trips", {

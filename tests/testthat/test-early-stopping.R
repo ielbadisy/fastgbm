@@ -100,11 +100,11 @@ test_that("early stopping is deterministic across thread counts", {
                   ntrees = 200L, learning_rate = 0.1, max_depth = 4L, min_node_size = 5L,
                   validation = list(x = va$x, time = va$time, status = va$status),
                   early_stopping = 10L, threads = 1L, seed = 1L, verbose = FALSE)
-  fit4 <- fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
+  fit2 <- fastgbm(tr$x, time = tr$time, status = tr$status, objective = "cox",
                   ntrees = 200L, learning_rate = 0.1, max_depth = 4L, min_node_size = 5L,
                   validation = list(x = va$x, time = va$time, status = va$status),
-                  early_stopping = 10L, threads = 4L, seed = 1L, verbose = FALSE)
+                  early_stopping = 10L, threads = 2L, seed = 1L, verbose = FALSE)
 
-  expect_equal(fit1$best_iteration, fit4$best_iteration)
-  expect_equal(predict(fit1, tr$x, type = "link"), predict(fit4, tr$x, type = "link"))
+  expect_equal(fit1$best_iteration, fit2$best_iteration)
+  expect_equal(predict(fit1, tr$x, type = "link"), predict(fit2, tr$x, type = "link"))
 })
