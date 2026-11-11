@@ -21,7 +21,10 @@ fastgbm_pexp_cutpoints <- function(time, status, bins = 10L) {
 # interval) and `event` (1 only for the interval containing the subject's
 # actual event, else 0). Appends log(interval midpoint) as an extra feature
 # column, so the boosted ensemble models the hazard's shape over time jointly
-# with the covariates rather than assuming a fixed post-hoc baseline.
+# with the covariates rather than assuming a fixed post-hoc baseline. The
+# midpoint is that of the whole interval, as in fastgbm_pexp_cumhaz(): it must
+# not depend on the subject's own exit time, or the trees learn that rows at
+# the full midpoint (subjects who survived the interval) never have events.
 fastgbm_expand_person_time <- function(x, time, status, cutpoints) {
   n <- nrow(x)
   nbins <- length(cutpoints) - 1L
@@ -33,7 +36,7 @@ fastgbm_expand_person_time <- function(x, time, status, cutpoints) {
       if (time[i] <= c0) break
       exposure <- min(time[i], c1) - c0
       event <- as.integer(status[i] == 1L && time[i] > c0 && time[i] <= c1)
-      midpoint <- (c0 + min(c1, time[i])) / 2
+      midpoint <- (c0 + c1) / 2
       rows_i[[length(rows_i) + 1L]] <- c(subject = i, interval = j, midpoint = midpoint, exposure = exposure, event = event)
       if (time[i] <= c1) break
     }
