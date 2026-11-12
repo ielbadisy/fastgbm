@@ -49,6 +49,6 @@ bit-identical regardless of `threads`.
 
 ## What's not yet implemented
 
-Leaf-wise (`grow_policy = "lossguide"`) growth, validation-based early stopping
-(accepted but inactive), monotonic/interaction constraints, and AFT distributions
-other than the normal.
+Leaf-wise (`grow_policy = "lossguide"`) growth, monotonic/interaction constraints,
+and AFT distributions other than the normal. Validation-based early stopping is
+implemented: supply `validation` together with `early_stopping`.
