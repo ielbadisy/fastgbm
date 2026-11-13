@@ -23,8 +23,7 @@
 predict.fastgbm <- function(object, newdata, type = c("response", "link", "survival"), times = NULL, ...) {
   type <- match.arg(type)
   if (!is.null(object$formula_terms) && is.data.frame(newdata)) {
-    mf <- model.frame(object$formula_terms, data = newdata, na.action = na.pass, xlev = object$xlevels)
-    newdata <- model.matrix(delete.response(object$formula_terms), data = mf, contrasts.arg = object$contrasts)
+    newdata <- fastgbm_formula_newdata(object, newdata)
   } else {
     newdata <- fastgbm_as_matrix(newdata)
   }

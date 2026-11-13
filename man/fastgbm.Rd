@@ -79,7 +79,11 @@ performance matters.}
 
 \item{max_depth}{Maximum tree depth. Defaults to `5`.}
 
-\item{min_node_size}{Minimum rows in a node before splitting. Defaults to `10`.}
+\item{min_node_size}{Minimum number of training rows in each child node
+(leaf). A split is only considered when both children would hold at least
+`min_node_size` rows (counting rows with a missing value on the side they
+are routed to), so a node needs at least `2 * min_node_size` rows to be
+split. Rows are those of the subsample drawn for the tree. Defaults to `10`.}
 
 \item{max_leaves}{Unused placeholder for compatibility.}
 

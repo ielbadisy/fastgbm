@@ -175,6 +175,7 @@ struct LevelSplitFinder : public Worker {
   const RVector<double> hess;
   const std::vector<int>& max_bin_by_feature;
   double lambda, gamma, min_child_weight;
+  int min_node_size;
   const std::vector<NodeContext>& node_ctx;
   const std::vector<int>& task_node;
   const std::vector<int>& task_feature;
@@ -183,12 +184,13 @@ struct LevelSplitFinder : public Worker {
   LevelSplitFinder(const IntegerMatrix& bins_, const NumericVector& grad_, const NumericVector& hess_,
                    const std::vector<int>& max_bin_by_feature_,
                    double lambda_, double gamma_, double min_child_weight_,
+                   int min_node_size_,
                    const std::vector<NodeContext>& node_ctx_,
                    const std::vector<int>& task_node_, const std::vector<int>& task_feature_,
                    std::vector<NodeSplit>& results_)
     : bins(bins_), grad(grad_), hess(hess_), max_bin_by_feature(max_bin_by_feature_),
       lambda(lambda_), gamma(gamma_), min_child_weight(min_child_weight_),
-      node_ctx(node_ctx_), task_node(task_node_), task_feature(task_feature_),
+      min_node_size(min_node_size_), node_ctx(node_ctx_), task_node(task_node_), task_feature(task_feature_),
       results(results_) {}
 
   void operator()(std::size_t begin, std::size_t end) {
@@ -198,6 +200,7 @@ struct LevelSplitFinder : public Worker {
     // is race-free while eliminating a per-task allocation.
     thread_local std::vector<double> gsum_buf;
     thread_local std::vector<double> hsum_buf;
+    thread_local std::vector<int> csum_buf;
 
     for (std::size_t idx = begin; idx < end; ++idx) {
       const std::vector<int>& node_rows = *node_ctx[task_node[idx]].rows;
@@ -221,11 +224,15 @@ struct LevelSplitFinder : public Worker {
       if (static_cast<int>(gsum_buf.size()) < alloc_bin + 1) {
         gsum_buf.resize(alloc_bin + 1);
         hsum_buf.resize(alloc_bin + 1);
+        csum_buf.resize(alloc_bin + 1);
       }
       std::fill(gsum_buf.begin(), gsum_buf.begin() + alloc_bin + 1, 0.0);
       std::fill(hsum_buf.begin(), hsum_buf.begin() + alloc_bin + 1, 0.0);
+      std::fill(csum_buf.begin(), csum_buf.begin() + alloc_bin + 1, 0);
       std::vector<double>& gsum = gsum_buf;
       std::vector<double>& hsum = hsum_buf;
+      std::vector<int>& csum = csum_buf;
+      const int node_n = static_cast<int>(node_rows.size());
       int actual_max_bin = 0;
       for (int r : node_rows) {
         int b = bins(r, feature);
@@ -233,6 +240,7 @@ struct LevelSplitFinder : public Worker {
         if (b > alloc_bin) b = alloc_bin;
         gsum[b] += grad[r];
         hsum[b] += hess[r];
+        csum[b] += 1;
         if (b > actual_max_bin) actual_max_bin = b;
       }
       if (actual_max_bin < 2) {
@@ -242,10 +250,14 @@ struct LevelSplitFinder : public Worker {
 
       double missing_g = gsum[0];
       double missing_h = hsum[0];
+      const int missing_c = csum[0];
       double left_g = 0.0, left_h = 0.0;
+      int left_c = 0;
       for (int t = 1; t < actual_max_bin; ++t) {
         left_g += gsum[t];
         left_h += hsum[t];
+        left_c += csum[t];
+        const int right_c = node_n - left_c - missing_c;
         double right_g = G - left_g - missing_g;
         double right_h = H - left_h - missing_h;
         if (left_h < min_child_weight || right_h < min_child_weight) continue;
@@ -256,6 +268,10 @@ struct LevelSplitFinder : public Worker {
           double GR = right_g + (missing_side == 1 ? missing_g : 0.0);
           double HR = right_h + (missing_side == 1 ? missing_h : 0.0);
           if (HL < min_child_weight || HR < min_child_weight) continue;
+          // Both children must hold at least `min_node_size` rows.
+          int CL = left_c + (missing_side == 0 ? missing_c : 0);
+          int CR = right_c + (missing_side == 1 ? missing_c : 0);
+          if (CL < min_node_size || CR < min_node_size) continue;
           double gain = 0.5 * (
             (GL * GL) / (HL + lambda) +
             (GR * GR) / (HR + lambda) -
@@ -377,7 +393,7 @@ static TreeModel build_tree(const IntegerMatrix& bins, const NumericVector& grad
 
     std::vector<NodeSplit> results(total_tasks);
     LevelSplitFinder worker(bins, grad, hess, max_bin_by_feature, lambda, gamma, min_child_weight,
-                            node_ctx, task_node, task_feature, results);
+                            min_node_size, node_ctx, task_node, task_feature, results);
     // Parallel dispatch overhead is not worth it for a small combined task count,
     // *or* when only one thread was requested (`threads = 1L`) -- RcppParallel's
     // parallelFor() still pays its scheduling/dispatch cost even with a single
@@ -499,6 +515,7 @@ struct MultiLevelSplitFinder : public Worker {
   int K;
   const std::vector<int>& max_bin_by_feature;
   double lambda, gamma, min_child_weight;
+  int min_node_size;
   const std::vector<MultiNodeContext>& node_ctx;
   const std::vector<int>& task_node;
   const std::vector<int>& task_feature;
@@ -507,15 +524,18 @@ struct MultiLevelSplitFinder : public Worker {
   MultiLevelSplitFinder(const IntegerMatrix& bins_, const NumericMatrix& grad_, const NumericMatrix& hess_,
                         int K_, const std::vector<int>& max_bin_by_feature_,
                         double lambda_, double gamma_, double min_child_weight_,
+                        int min_node_size_,
                         const std::vector<MultiNodeContext>& node_ctx_,
                         const std::vector<int>& task_node_, const std::vector<int>& task_feature_,
                         std::vector<MultiNodeSplit>& results_)
     : bins(bins_), grad(grad_), hess(hess_), K(K_), max_bin_by_feature(max_bin_by_feature_),
       lambda(lambda_), gamma(gamma_), min_child_weight(min_child_weight_),
+      min_node_size(min_node_size_),
       node_ctx(node_ctx_), task_node(task_node_), task_feature(task_feature_),
       results(results_) {}
 
   void operator()(std::size_t begin, std::size_t end) {
+    thread_local std::vector<int> csum;
     thread_local std::vector<double> gsum;  // (alloc_bin + 1) x K, bin-major
     thread_local std::vector<double> hsum;
     std::vector<double> left_g(K), left_h(K), GL(K), HL(K), GR(K), HR(K);
@@ -534,8 +554,11 @@ struct MultiLevelSplitFinder : public Worker {
         gsum.resize(width);
         hsum.resize(width);
       }
+      if (static_cast<int>(csum.size()) < alloc_bin + 1) csum.resize(alloc_bin + 1);
       std::fill(gsum.begin(), gsum.begin() + width, 0.0);
       std::fill(hsum.begin(), hsum.begin() + width, 0.0);
+      std::fill(csum.begin(), csum.begin() + alloc_bin + 1, 0);
+      const int node_n = static_cast<int>(ctx.rows->size());
       int actual_max_bin = 0;
       for (int r : *ctx.rows) {
         int b = bins(r, feature);
@@ -545,6 +568,7 @@ struct MultiLevelSplitFinder : public Worker {
           gsum[b * K + k] += grad(r, k);
           hsum[b * K + k] += hess(r, k);
         }
+        csum[b] += 1;
         if (b > actual_max_bin) actual_max_bin = b;
       }
       if (actual_max_bin < 2) {
@@ -554,7 +578,11 @@ struct MultiLevelSplitFinder : public Worker {
 
       std::fill(left_g.begin(), left_g.end(), 0.0);
       std::fill(left_h.begin(), left_h.end(), 0.0);
+      const int missing_c = csum[0];
+      int left_c = 0;
       for (int t = 1; t < actual_max_bin; ++t) {
+        left_c += csum[t];
+        const int right_c = node_n - left_c - missing_c;
         double left_h_tot = 0.0, right_h_tot = 0.0;
         for (int k = 0; k < K; ++k) {
           left_g[k] += gsum[t * K + k];
@@ -565,6 +593,9 @@ struct MultiLevelSplitFinder : public Worker {
         if (left_h_tot < min_child_weight || right_h_tot < min_child_weight) continue;
 
         for (int missing_side = 0; missing_side < 2; ++missing_side) {
+          int CL = left_c + (missing_side == 0 ? missing_c : 0);
+          int CR = right_c + (missing_side == 1 ? missing_c : 0);
+          if (CL < min_node_size || CR < min_node_size) continue;
           double hl_tot = 0.0, hr_tot = 0.0, gain_sum = 0.0, fisher = 0.0;
           for (int k = 0; k < K; ++k) {
             double mg = gsum[k], mh = hsum[k];
@@ -676,6 +707,7 @@ static std::vector<TreeModel> build_tree_multi(const IntegerMatrix& bins, const 
     int total_tasks = static_cast<int>(task_node.size());
     std::vector<MultiNodeSplit> results(total_tasks);
     MultiLevelSplitFinder worker(bins, grad, hess, K, max_bin_by_feature, lambda, gamma, min_child_weight,
+                                 min_node_size,
                                  node_ctx, task_node, task_feature, results);
     if (num_threads != 1 && total_tasks >= 8) {
       parallelFor(0, total_tasks, worker, /*grainSize=*/1, num_threads);

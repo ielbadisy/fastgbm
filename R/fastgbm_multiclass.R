@@ -87,8 +87,7 @@ fastgbm_multiclass_combine <- function(prob_list, class_levels) {
 predict.fastgbm_multiclass <- function(object, newdata, type = c("prob", "class"), ...) {
   type <- match.arg(type)
   if (!is.null(object$formula_terms) && is.data.frame(newdata)) {
-    mf <- model.frame(object$formula_terms, data = newdata, na.action = na.pass, xlev = object$xlevels)
-    newdata <- model.matrix(delete.response(object$formula_terms), data = mf, contrasts.arg = object$contrasts)
+    newdata <- fastgbm_formula_newdata(object, newdata)
   }
   probs <- fastgbm_multiclass_combine(
     lapply(object$fits, function(f) predict(f, newdata, type = "response")),

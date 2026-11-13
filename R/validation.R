@@ -45,7 +45,7 @@ fastgbm_prepare_matrix <- function(x, formula_terms = NULL, xlevels = NULL, cont
   if (is.data.frame(x)) {
     if (!is.null(formula_terms)) {
       mf <- model.frame(formula_terms, data = x, na.action = na.pass, xlev = xlevels)
-      mm <- model.matrix(delete.response(formula_terms), data = mf, contrasts.arg = contrasts)
+      mm <- fastgbm_drop_intercept(model.matrix(delete.response(formula_terms), data = mf, contrasts.arg = contrasts))
       attr(mm, "terms") <- formula_terms
       attr(mm, "xlevels") <- xlevels
       attr(mm, "contrasts") <- contrasts
