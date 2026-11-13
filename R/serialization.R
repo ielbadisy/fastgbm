@@ -4,16 +4,16 @@
 #' @param path Path to write the serialized model to.
 #' @return `path`, invisibly.
 #' @export
-save_fastgbm <- function(object, path) {
+savefastgbm <- function(object, path) {
   saveRDS(object, path)
   invisible(path)
 }
 
 #' Load a serialized fastgbm model
 #'
-#' @param path Path to a serialized model, as written by [save_fastgbm()].
+#' @param path Path to a serialized model, as written by [savefastgbm()].
 #' @return A `fastgbm` object.
 #' @export
-load_fastgbm <- function(path) {
+loadfastgbm <- function(path) {
   readRDS(path)
 }

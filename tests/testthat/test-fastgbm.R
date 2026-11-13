@@ -5,8 +5,8 @@ test_that("serialization round trips", {
   fit <- fastgbm(x, time = time, status = status, objective = "cox", ntrees = 2L,
                 learning_rate = 0.2, max_depth = 1L, min_node_size = 1L, seed = 3L, verbose = FALSE)
   tmp <- tempfile(fileext = ".rds")
-  save_fastgbm(fit, tmp)
-  fit2 <- load_fastgbm(tmp)
+  savefastgbm(fit, tmp)
+  fit2 <- loadfastgbm(tmp)
   expect_equal(predict(fit, x), predict(fit2, x))
 })
 
