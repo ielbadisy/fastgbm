@@ -1,3 +1,12 @@
+# fastgbm 0.7.2
+
+* Exported functions were renamed to glued lowercase names (no underscores). The old names still work but are deprecated and will be removed in a future release.
+
+| Old | New |
+|---|---|
+| `load_fastgbm()` | `loadfastgbm()` |
+| `save_fastgbm()` | `savefastgbm()` |
+
 # fastgbm 0.7.1
 
 ## Bug fixes

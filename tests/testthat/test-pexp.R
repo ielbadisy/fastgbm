@@ -138,8 +138,8 @@ test_that("pexp serialization round trips", {
   status <- rbinom(n, 1, 0.8)
   fit <- fastgbm(x, time = time, status = status, objective = "pexp", ntrees = 20L, verbose = FALSE)
   tmp <- tempfile(fileext = ".rds")
-  save_fastgbm(fit, tmp)
-  fit2 <- load_fastgbm(tmp)
+  savefastgbm(fit, tmp)
+  fit2 <- loadfastgbm(tmp)
   expect_equal(predict(fit, x, type = "link"), predict(fit2, x, type = "link"))
   expect_equal(predict(fit, x, type = "survival", times = c(1, 5)),
               predict(fit2, x, type = "survival", times = c(1, 5)))
