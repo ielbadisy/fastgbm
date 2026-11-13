@@ -1,3 +1,14 @@
+# fastgbm 0.7.3
+
+* `min_node_size` is now a true minimum leaf size: a split is only accepted
+  when both children hold at least `min_node_size` rows (missing values
+  counted on the side they are routed to). Before, it only required the parent
+  to have `2 * min_node_size` rows, so leaves could be much smaller than
+  `min_node_size`. This applies to all objectives and to `comrisk = "ccsh"`.
+  Fitted models can differ from earlier versions for the same seed.
+* The formula interface no longer keeps the `(Intercept)` column of the model
+  matrix as a feature. Models fitted with earlier versions still predict.
+
 # fastgbm 0.7.2
 
 * Exported functions were renamed to glued lowercase names (no underscores). The old names still work but are deprecated and will be removed in a future release.
