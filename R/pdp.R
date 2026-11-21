@@ -37,7 +37,8 @@ pdp <- function(object, feature, data, grid_resolution = 20L, type = NULL) {
   }
   type <- match.arg(type, c("response", "link"))
 
-  col <- data[[feature]]
+  mat <- is.matrix(data)
+  col <- if (mat) data[, feature] else data[[feature]]
   if (is.factor(col) || is.character(col)) {
     grid <- sort(unique(col))
   } else {
@@ -51,7 +52,7 @@ pdp <- function(object, feature, data, grid_resolution = 20L, type = NULL) {
 
   yhat <- vapply(grid, function(g) {
     d <- data
-    d[[feature]] <- g
+    if (mat) d[, feature] <- g else d[[feature]] <- g
     mean(predict(object, d, type = type), na.rm = TRUE)
   }, numeric(1))
 
@@ -62,21 +63,37 @@ pdp <- function(object, feature, data, grid_resolution = 20L, type = NULL) {
   out
 }
 
+#' Plot a partial dependence profile
+#'
+#' Draws the profile returned by [pdp()]. With \pkg{ggplot2} installed the plot
+#' is a `ggplot` object (printed when not assigned), so labels and layers can be
+#' changed with `+`; otherwise a base graphics plot is drawn and `x` is returned
+#' invisibly.
+#'
+#' @param x a `fastgbm_pdp` object from [pdp()].
+#' @param xlab,ylab axis labels; default to the feature name and the scale of
+#'   the partial dependence.
+#' @param title,subtitle,caption plot text; `NULL` (default) draws none.
+#' @param ... passed to [plot()] on the base graphics path.
+#' @return a `ggplot` object, or `x` invisibly when \pkg{ggplot2} is missing.
+#' @examples
+#' set.seed(1)
+#' x <- matrix(rnorm(200), ncol = 2, dimnames = list(NULL, c("x1", "x2")))
+#' fit <- fastgbm(x, time = rexp(100, exp(x[, 1])), status = rep(1L, 100),
+#'                ntrees = 20L, verbose = FALSE)
+#' plot(pdp(fit, "x1", x), xlab = "x1 (units)")
 #' @export
-plot.fastgbm_pdp <- function(x, ...) {
-  ylab <- paste0("Partial dependence (", attr(x, "pdp_type"), ")")
-  xlab <- x$feature[1]
-  if (requireNamespace("ggplot2", quietly = TRUE)) {
-    .data <- ggplot2::.data
-    print(
-      ggplot2::ggplot(x, ggplot2::aes(x = .data$x, y = .data$yhat)) +
-        ggplot2::geom_line() +
-        ggplot2::geom_point(size = 0.8) +
-        ggplot2::labs(x = xlab, y = ylab) +
-        ggplot2::theme_minimal()
-    )
+plot.fastgbm_pdp <- function(x, xlab = x$feature[1], ylab = NULL, title = NULL, subtitle = NULL,
+                             caption = NULL, ...) {
+  if (is.null(ylab)) ylab <- paste0("Partial dependence (", attr(x, "pdp_type"), ")")
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    plot(x$x, x$yhat, type = "b", xlab = xlab, ylab = ylab, main = title, sub = subtitle, ...)
     return(invisible(x))
   }
-  plot(x$x, x$yhat, type = "b", xlab = xlab, ylab = ylab, ...)
-  invisible(x)
+  .data <- ggplot2::.data
+  ggplot2::ggplot(x, ggplot2::aes(x = .data$x, y = .data$yhat)) +
+    ggplot2::geom_line(colour = "black") +
+    ggplot2::geom_point(size = 0.8, colour = "black") +
+    ggplot2::labs(x = xlab, y = ylab, title = title, subtitle = subtitle, caption = caption) +
+    ggplot2::theme_minimal()
 }

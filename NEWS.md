@@ -1,3 +1,12 @@
+# fastgbm 0.7.4
+
+* `pdp()` now accepts a numeric matrix for `data`, as documented; before it failed with
+  "subscript out of bounds". Results for data frames are unchanged.
+* `plot.fastgbm_pdp()` now returns the `ggplot` object instead of printing it inside the method and
+  returning the data, so labels and layers can be changed with `+` (bug fix; the base graphics
+  fallback still returns the data invisibly). New arguments `xlab`, `ylab`, `title`, `subtitle`
+  and `caption` (no title by default).
+
 # fastgbm 0.7.3
 
 * `min_node_size` is now a true minimum leaf size: a split is only accepted
