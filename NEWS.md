@@ -7,6 +7,10 @@
   survival probability. The default stays on the link scale.
 * `fastgbm()` gains `aft_sigma`, the scale of the normal error of `objective = "aft"`, used by the
   loss, early stopping and survival predictions. It was fixed at 1; the default stays 1.
+* `predict(type = "survival")` for `objective = "aft"` with several `times` returned a scrambled
+  matrix: the linear predictor and the times were recycled in the wrong order, so rows mixed
+  subjects and columns mixed horizons. Each row is now one subject and each column one time.
+  Single-time predictions were correct and are unchanged.
 
 # fastgbm 0.7.4
 
