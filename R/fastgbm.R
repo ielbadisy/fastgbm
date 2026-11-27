@@ -105,6 +105,10 @@
 #'   [predict.fastgbm_comrisk()].
 #' @param cause For `comrisk = "sh"`, the cause of interest (a status code or
 #'   factor level). Defaults to the first cause.
+#' @param aft_sigma Scale \eqn{\sigma} of the normal error for `objective =
+#'   "aft"`, in \eqn{\log T = F(x) + \sigma Z}. It is fixed, not estimated,
+#'   and is used by the loss, early stopping and survival predictions. Treat
+#'   it as a tuning parameter. Ignored by other objectives.
 #' @param ... Additional arguments (e.g. `data` for the formula interface).
 #'
 #' @return A fitted `fastgbm` object.
@@ -130,6 +134,7 @@ fastgbm <- function(x, time = NULL, status = NULL, y = NULL, objective = NULL,
                     verbose = TRUE,
                     comrisk = NULL,
                     cause = NULL,
+                    aft_sigma = 1,
                     ...) {
   if (inherits(x, "formula")) {
     dots <- list(...)
@@ -159,7 +164,8 @@ fastgbm <- function(x, time = NULL, status = NULL, y = NULL, objective = NULL,
       seed = seed,
       verbose = verbose,
       comrisk = comrisk,
-      cause = cause
+      cause = cause,
+      aft_sigma = aft_sigma
     ))))
   }
 
@@ -312,7 +318,8 @@ fastgbm <- function(x, time = NULL, status = NULL, y = NULL, objective = NULL,
     as.integer(status_valid),
     early_stopping_int,
     numeric(0),
-    numeric(0)
+    numeric(0),
+    as.numeric(aft_sigma)
   )
   fit$call <- match.call()
   fit$objective <- objective
@@ -345,7 +352,7 @@ fastgbm <- function(x, time = NULL, status = NULL, y = NULL, objective = NULL,
     if (objective == "cox") {
       fit$baseline <- fastgbm_survival_baseline(time, status, fit$fitted_raw)
     } else {
-      fit$survival_sigma <- 1
+      fit$survival_sigma <- aft_sigma
     }
   }
   class(fit) <- "fastgbm"

@@ -77,3 +77,24 @@ test_that("formula interface accepts validation data frames", {
   expect_equal(m2$validation_history, m3$validation_history)
   expect_equal(predict(m1, v, type = "link"), predict(m3, x(v), type = "link"))
 })
+
+test_that("aft_sigma sets the AFT scale in the loss and in survival predictions", {
+  set.seed(4)
+  x <- matrix(rnorm(400), ncol = 2, dimnames = list(NULL, c("a", "b")))
+  t0 <- exp(x[, 1] + rnorm(200, 0, 0.5)); cn <- rexp(200, 0.2)
+  tm <- pmin(t0, cn); st <- as.integer(t0 <= cn); v <- 151:200; a <- 1:150
+  ft <- function(...) fastgbm(x[a, ], time = tm[a], status = st[a], objective = "aft", ntrees = 10L,
+                              verbose = FALSE, validation = list(x = x[v, ], time = tm[v], status = st[v]),
+                              early_stopping = 20L, ...)
+  m1 <- ft(); m2 <- ft(aft_sigma = 0.5)
+  expect_equal(m1$survival_sigma, 1); expect_equal(m2$survival_sigma, 0.5)
+  expect_equal(predict(m1, x, type = "link"), predict(ft(aft_sigma = 1), x, type = "link"))
+  expect_false(isTRUE(all.equal(predict(m1, x, type = "link"), predict(m2, x, type = "link"))))
+  # validation loss at the best round equals the normal censored loss at sigma = 0.5
+  lp <- predict(m2, x[v, ], type = "link"); z <- (log(tm[v]) - lp) / 0.5
+  own <- sum(ifelse(st[v] == 1, z^2 / 2, -pnorm(z, lower.tail = FALSE, log.p = TRUE)))
+  expect_equal(m2$validation_history[m2$best_iteration], own, tolerance = 1e-6)
+  expect_equal(predict(m2, x[1, , drop = FALSE], type = "survival", times = 2)[1, 1],
+               pnorm((log(2) - predict(m2, x[1, , drop = FALSE], type = "link")) / 0.5,
+                     lower.tail = FALSE))
+})

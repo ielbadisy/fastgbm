@@ -1184,7 +1184,8 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
                                 SEXP gammaSEXP, SEXP min_child_weightSEXP, SEXP seedSEXP,
                                 SEXP threadsSEXP, SEXP verboseSEXP,
                                 SEXP x_validSEXP, SEXP time_validSEXP, SEXP status_validSEXP,
-                                SEXP early_stoppingSEXP, SEXP ipcwSEXP, SEXP ipcw_validSEXP) {
+                                SEXP early_stoppingSEXP, SEXP ipcwSEXP, SEXP ipcw_validSEXP,
+                                SEXP sigmaSEXP) {
   BEGIN_RCPP
   NumericMatrix x(xSEXP);
   NumericVector time(timeSEXP);
@@ -1204,6 +1205,7 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
   int threads = as<int>(threadsSEXP);
   bool verbose = as<bool>(verboseSEXP);
   int early_stopping = as<int>(early_stoppingSEXP);
+  double sigma = as<double>(sigmaSEXP);
 
   NumericMatrix x_valid(x_validSEXP);
   NumericVector time_valid(time_validSEXP);
@@ -1291,7 +1293,7 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
     if (objective == "finegray") {
       compute_finegray_grad_hess(pred, time, status, ipcw, grad, hess);
     } else if (objective == "aft") {
-      compute_aft_grad_hess(pred, time, status, grad, hess, 1.0);
+      compute_aft_grad_hess(pred, time, status, grad, hess, sigma);
     } else if (objective == "pexp") {
       compute_pexp_grad_hess(pred, time, status, grad, hess);
     } else if (objective == "regression") {
@@ -1324,7 +1326,7 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
       if (objective == "finegray") {
         val_loss = compute_finegray_loss(pred_valid, time_valid, status_valid, ipcw_valid);
       } else if (objective == "aft") {
-        val_loss = compute_aft_loss(pred_valid, time_valid, status_valid, 1.0);
+        val_loss = compute_aft_loss(pred_valid, time_valid, status_valid, sigma);
       } else if (objective == "pexp") {
         val_loss = compute_pexp_loss(pred_valid, time_valid, status_valid);
       } else if (objective == "regression") {
@@ -1378,7 +1380,7 @@ extern "C" SEXP fastgbm_fit_cpp(SEXP xSEXP, SEXP timeSEXP, SEXP statusSEXP,
     _["max_depth"] = max_depth,
     _["min_node_size"] = min_node_size,
     _["max_bins"] = max_bins,
-    _["survival_sigma"] = 1.0,
+    _["survival_sigma"] = sigma,
     _["best_iteration"] = has_validation ? best_iteration : static_cast<int>(trees.size()),
     _["validation_history"] = wrap(validation_history),
     _["stopping_reason"] = stopping_reason
