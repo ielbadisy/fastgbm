@@ -3,6 +3,8 @@
 * With the formula interface, `validation` can be a data frame with the same columns as `data`, or
   `validation$x` a data frame of predictors; they are encoded with the training terms, factor
   levels and contrasts. Before, early stopping with a formula failed with a column mismatch.
+* `pdp()` gains `type = "survival"` with a `times` horizon, for the partial dependence of the
+  survival probability. The default stays on the link scale.
 
 # fastgbm 0.7.4
 

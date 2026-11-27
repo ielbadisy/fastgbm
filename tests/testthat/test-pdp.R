@@ -110,3 +110,16 @@ test_that("plot.fastgbm_pdp() returns an unprinted ggplot with editable labels",
   expect_identical(g2$labels$title, "PD")
   expect_null(plot(p, title = NULL)$labels$title)
 })
+
+test_that("pdp() on the survival scale averages predicted survival at one horizon", {
+  set.seed(3)
+  x <- matrix(rnorm(400), ncol = 2, dimnames = list(NULL, c("x1", "x2")))
+  fit <- fastgbm(x, time = rexp(200, exp(x[, 1])), status = rep(1L, 200), ntrees = 30L, verbose = FALSE)
+  p <- pdp(fit, "x1", x, grid_resolution = 5L, type = "survival", times = 0.5)
+  own <- vapply(p$x, function(g) {
+    d <- x; d[, "x1"] <- g; mean(predict(fit, d, type = "survival", times = 0.5))
+  }, 0)
+  expect_equal(p$yhat, own)
+  expect_lt(cor(p$x, p$yhat), 0)
+  expect_identical(attr(p, "pdp_type"), "survival at t = 0.5")
+})

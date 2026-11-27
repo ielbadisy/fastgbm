@@ -7,9 +7,8 @@
 #' Partial dependence is computed on the *linear predictor* (`type = "link"`)
 #' by default, i.e. the Cox log-risk score or the AFT log-time location
 #' parameter. This is a risk-score (or location-score) partial dependence, not
-#' a survival-probability partial dependence; use `predict(object, ..., type =
-#' "survival")` directly if a probability-scale summary at specific horizons
-#' is needed.
+#' a survival-probability partial dependence. For the survival probability at
+#' a horizon, use `type = "survival"` with a single `times`.
 #'
 #' @param object a fitted `fastgbm` model.
 #' @param feature name of the feature (column of `data`) to profile.
@@ -19,13 +18,16 @@
 #' @param grid_resolution number of grid points for numeric features (fewer
 #'   are used if the feature has fewer distinct values). Ignored for factor
 #'   or character features, where every level is used.
-#' @param type `"response"` or `"link"`; defaults to `"link"` (the risk/location
-#'   score).
+#' @param type `"response"`, `"link"` or `"survival"` (survival objectives
+#'   only); defaults to `"link"` (the risk/location score).
+#' @param times a single horizon, required when `type = "survival"`: the
+#'   partial dependence is then the mean predicted survival probability at
+#'   `times`.
 #'
 #' @return a `data.frame` with class `fastgbm_pdp` and columns `feature`,
 #'   `x` (grid value) and `yhat` (average prediction).
 #' @export
-pdp <- function(object, feature, data, grid_resolution = 20L, type = NULL) {
+pdp <- function(object, feature, data, grid_resolution = 20L, type = NULL, times = NULL) {
   if (!inherits(object, "fastgbm")) {
     stop("`object` must be a fitted `fastgbm` model.", call. = FALSE)
   }
@@ -35,7 +37,7 @@ pdp <- function(object, feature, data, grid_resolution = 20L, type = NULL) {
   if (is.null(type)) {
     type <- "link"
   }
-  type <- match.arg(type, c("response", "link"))
+  type <- match.arg(type, c("response", "link", "survival"))
 
   mat <- is.matrix(data)
   col <- if (mat) data[, feature] else data[[feature]]
@@ -53,12 +55,12 @@ pdp <- function(object, feature, data, grid_resolution = 20L, type = NULL) {
   yhat <- vapply(grid, function(g) {
     d <- data
     if (mat) d[, feature] <- g else d[[feature]] <- g
-    mean(predict(object, d, type = type), na.rm = TRUE)
+    mean(predict(object, d, type = type, times = times), na.rm = TRUE)
   }, numeric(1))
 
   out <- data.frame(feature = feature, x = grid, yhat = yhat, stringsAsFactors = FALSE)
   class(out) <- c("fastgbm_pdp", "data.frame")
-  attr(out, "pdp_type") <- type
+  attr(out, "pdp_type") <- if (type == "survival") paste0("survival at t = ", times) else type
   attr(out, "objective") <- object$objective
   out
 }
