@@ -98,3 +98,13 @@ test_that("aft_sigma sets the AFT scale in the loss and in survival predictions"
                pnorm((log(2) - predict(m2, x[1, , drop = FALSE], type = "link")) / 0.5,
                      lower.tail = FALSE))
 })
+
+test_that("aft survival matrix has one row per subject and one column per time", {
+  set.seed(5)
+  x <- matrix(rnorm(400), ncol = 2, dimnames = list(NULL, c("a", "b")))
+  fit <- fastgbm(x, time = exp(x[, 1] + rnorm(200)), status = rep(1L, 200), objective = "aft",
+                 ntrees = 20L, verbose = FALSE)
+  tt <- c(0.5, 1, 2); lp <- predict(fit, x[1:4, ], type = "link")
+  expect_equal(unname(predict(fit, x[1:4, ], type = "survival", times = tt)),
+               1 - pnorm(outer(-lp, log(tt), "+")))
+})

@@ -136,9 +136,7 @@ fastgbm_survival_survprob <- function(baseline, lp, times, objective = "cox", si
     out <- outer(exp(pmin(lp, 35)), haz, function(rr, hh) exp(-hh * rr))
     return(out)
   }
-  eta <- matrix(rep(lp, each = length(times)), nrow = length(lp))
-  z <- (log(times) - eta) / sigma
-  1 - pnorm(z)
+  1 - pnorm(outer(-lp, log(times), "+") / sigma)
 }
 
 survival_cindex <- function(time, status, score) {
