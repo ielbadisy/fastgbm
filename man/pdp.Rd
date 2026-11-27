@@ -4,7 +4,7 @@
 \alias{pdp}
 \title{Partial dependence for a fitted fastgbm model}
 \usage{
-pdp(object, feature, data, grid_resolution = 20L, type = NULL)
+pdp(object, feature, data, grid_resolution = 20L, type = NULL, times = NULL)
 }
 \arguments{
 \item{object}{a fitted `fastgbm` model.}
@@ -19,8 +19,12 @@ data frame) used to fit `object`.}
 are used if the feature has fewer distinct values). Ignored for factor
 or character features, where every level is used.}
 
-\item{type}{`"response"` or `"link"`; defaults to `"link"` (the risk/location
-score).}
+\item{type}{`"response"`, `"link"` or `"survival"` (survival objectives
+only); defaults to `"link"` (the risk/location score).}
+
+\item{times}{a single horizon, required when `type = "survival"`: the
+partial dependence is then the mean predicted survival probability at
+`times`.}
 }
 \value{
 a `data.frame` with class `fastgbm_pdp` and columns `feature`,
@@ -35,7 +39,6 @@ across every row of `data` and the resulting predictions are averaged.
 Partial dependence is computed on the *linear predictor* (`type = "link"`)
 by default, i.e. the Cox log-risk score or the AFT log-time location
 parameter. This is a risk-score (or location-score) partial dependence, not
-a survival-probability partial dependence; use `predict(object, ..., type =
-"survival")` directly if a probability-scale summary at specific horizons
-is needed.
+a survival-probability partial dependence. For the survival probability at
+a horizon, use `type = "survival"` with a single `times`.
 }
