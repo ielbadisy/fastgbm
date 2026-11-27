@@ -225,7 +225,7 @@ fastgbm_finegray_fit <- function(xmat, time, status_fg, ipcw, hyper, validation,
     as.numeric(hyper$min_child_weight), as.integer(seed), as.integer(hyper$threads),
     as.logical(verbose), x_valid, as.numeric(time_valid), as.integer(status_valid),
     if (has_validation) as.integer(early_stopping) else 0L,
-    as.numeric(ipcw), as.numeric(ipcw_valid)
+    as.numeric(ipcw), as.numeric(ipcw_valid), 1
   )
   fit$objective <- "finegray"
   fit$learning_rate <- hyper$learning_rate

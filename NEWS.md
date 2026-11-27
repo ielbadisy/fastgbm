@@ -5,6 +5,8 @@
   levels and contrasts. Before, early stopping with a formula failed with a column mismatch.
 * `pdp()` gains `type = "survival"` with a `times` horizon, for the partial dependence of the
   survival probability. The default stays on the link scale.
+* `fastgbm()` gains `aft_sigma`, the scale of the normal error of `objective = "aft"`, used by the
+  loss, early stopping and survival predictions. It was fixed at 1; the default stays 1.
 
 # fastgbm 0.7.4
 

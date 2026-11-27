@@ -31,6 +31,7 @@ fastgbm(
   verbose = TRUE,
   comrisk = NULL,
   cause = NULL,
+  aft_sigma = 1,
   ...
 )
 }
@@ -154,6 +155,11 @@ when `comrisk` is supplied, when `y` is a multi-state
 
 \item{cause}{For `comrisk = "sh"`, the cause of interest (a status code or
 factor level). Defaults to the first cause.}
+
+\item{aft_sigma}{Scale \eqn{\sigma} of the normal error for `objective =
+"aft"`, in \eqn{\log T = F(x) + \sigma Z}. It is fixed, not estimated,
+and is used by the loss, early stopping and survival predictions. Treat
+it as a tuning parameter. Ignored by other objectives.}
 
 \item{...}{Additional arguments (e.g. `data` for the formula interface).}
 }
