@@ -62,3 +62,18 @@ test_that("fastgbm() infers a regression objective for a non-Surv formula respon
   fit <- fastgbm(y ~ x1, data = dat, ntrees = 5, verbose = FALSE)
   expect_identical(fit$objective, "regression")
 })
+
+test_that("formula interface accepts validation data frames", {
+  d <- na.omit(survival::lung); d$status <- d$status - 1; d$sex <- factor(d$sex)
+  a <- d[1:120, ]; v <- d[-(1:120), ]
+  f <- survival::Surv(time, status) ~ age + sex + ph.ecog
+  ft <- function(val) fastgbm(f, data = a, ntrees = 30, validation = val, early_stopping = 5, verbose = FALSE)
+  m1 <- ft(v)
+  m2 <- ft(list(x = v[c("age", "sex", "ph.ecog")], time = v$time, status = v$status))
+  x <- function(d) model.matrix(~ age + sex + ph.ecog, d)[, -1]
+  m3 <- fastgbm(x(a), y = survival::Surv(a$time, a$status), ntrees = 30, verbose = FALSE,
+                validation = list(x = x(v), y = survival::Surv(v$time, v$status)), early_stopping = 5)
+  expect_equal(m1$validation_history, m3$validation_history)
+  expect_equal(m2$validation_history, m3$validation_history)
+  expect_equal(predict(m1, v, type = "link"), predict(m3, x(v), type = "link"))
+})

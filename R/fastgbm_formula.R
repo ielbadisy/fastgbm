@@ -1,11 +1,21 @@
-fastgbm_formula <- function(formula, data, ..., objective = NULL) {
+fastgbm_formula <- function(formula, data, ..., objective = NULL, validation = NULL) {
   mf <- model.frame(formula, data = data, na.action = na.pass)
   y <- model.response(mf)
   terms <- terms(mf)
   x <- fastgbm_drop_intercept(model.matrix(delete.response(terms), data = mf))
-  fit <- fastgbm(x, y = y, objective = objective, ...)
+  xlev <- .getXlevels(terms, mf)
+  # validation data given as a data frame go through the same terms, levels and contrasts as `data`
+  vmf <- function(d, tt = terms) model.frame(tt, data = d, na.action = na.pass, xlev = xlev)
+  vmm <- function(f) fastgbm_drop_intercept(model.matrix(delete.response(terms), data = f,
+                                                         contrasts.arg = attr(x, "contrasts")))
+  if (is.data.frame(validation)) {
+    vf <- vmf(validation); validation <- list(x = vmm(vf), y = model.response(vf))
+  } else if (is.data.frame(validation$x)) {
+    validation$x <- vmm(vmf(validation$x, delete.response(terms)))
+  }
+  fit <- fastgbm(x, y = y, objective = objective, validation = validation, ...)
   fit$formula_terms <- terms
-  fit$xlevels <- .getXlevels(terms, mf)
+  fit$xlevels <- xlev
   fit$contrasts <- attr(x, "contrasts")
   fit
 }
