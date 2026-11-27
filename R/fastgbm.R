@@ -73,7 +73,10 @@
 #' @param validation A list with `x` (in the same matrix representation as
 #'   the training data), and either `time`/`status`/a `survival::Surv` `y`
 #'   (survival objectives) or `y` (regression/binary), used for early
-#'   stopping. Must be supplied together with `early_stopping`.
+#'   stopping. Must be supplied together with `early_stopping`. With the
+#'   formula interface, `validation` can also be a data frame with the same
+#'   columns as `data` (response included), or `validation$x` a data frame of
+#'   the predictors; both are encoded with the training terms and levels.
 #' @param early_stopping Number of boosting rounds without validation-loss
 #'   improvement before stopping. Must be supplied together with
 #'   `validation`. When active, `fit$trees` is truncated to the

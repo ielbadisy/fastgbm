@@ -1,3 +1,9 @@
+# fastgbm 0.7.5
+
+* With the formula interface, `validation` can be a data frame with the same columns as `data`, or
+  `validation$x` a data frame of predictors; they are encoded with the training terms, factor
+  levels and contrasts. Before, early stopping with a formula failed with a column mismatch.
+
 # fastgbm 0.7.4
 
 * `pdp()` now accepts a numeric matrix for `data`, as documented; before it failed with
